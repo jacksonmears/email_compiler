@@ -9,6 +9,8 @@
 
 using json = nlohmann::json;
 
+constexpr uint16_t VALID_HTTP_RESPONSE_CODE = 299;
+
 // Helper: read access token from JSON
 std::string get_access_token(const std::string& token_file) {
     std::ifstream f(token_file);
@@ -26,13 +28,59 @@ std::string get_access_token(const std::string& token_file) {
 }
 
 
+// char* checkAuthValidation(char* buffer) {
+//     char* it = buffer;
+//     while (*++it != ' ');
+
+//     ++it;
+
+//     char* code = new char[4];
+//     code[3] = '\0';
+//     for (int i = 0; i < 3; ++i) {
+//         code[i] = *it++;
+//     }
+
+//     return code;
+// }
+
+
+uint16_t checkAuthValidation(char* buffer) {
+    char* it = buffer;
+    while (*++it != ' ');
+
+    ++it;
+
+    uint16_t code = 0;
+    for (int i = 0; i < 3; ++i) {
+        code *= 10;
+        code += *it++-'0';
+    }
+
+    return code;
+}
+
+
+
+bool cmp(char* code, char test[]) {
+    for (int i = 0; code[i]!='\0'; ++i) {
+        if (code[i] != test[i]) return false;
+    }
+    return true;
+}
+
+
 
 int main() {
+
+    int result;
+    if ((result = system("python auth.py"))) {
+        std::cerr << "user authentication failed\n";
+        return 1;
+    }
+
     // --- Initialize Winsock ---
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed\n";
-        return 1;
     }
 
     // --- Initialize OpenSSL ---
@@ -83,6 +131,7 @@ int main() {
         return 1;
     }
 
+
     // --- Get access token ---
     std::string access_token = get_access_token("tokens/tokens0.json");
     if (access_token.empty()) {
@@ -104,8 +153,18 @@ int main() {
     int bytes;
     while ((bytes = SSL_read(ssl, buffer, sizeof(buffer)-1)) > 0) {
         buffer[bytes] = '\0';
-        std::cout << buffer;
+
+
+        int code = checkAuthValidation(buffer);
+        if (code>VALID_HTTP_RESPONSE_CODE) {
+            std::cerr << "something went wrong in the http request idk\n";
+            return 1;
+        }
+        
+        std::cout << buffer << std::endl;
     }
+
+
 
     // --- Clean up ---
     SSL_shutdown(ssl);
