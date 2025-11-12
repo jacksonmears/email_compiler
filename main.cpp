@@ -8,8 +8,11 @@
 #include "external/json.hpp"  // https://github.com/nlohmann/json
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
+
 
 constexpr uint16_t VALID_HTTP_RESPONSE_CODE = 299;
+constexpr int BUFFER_SIZE = 4096;
 
 // Helper: read access token from JSON
 std::string get_access_token(const std::string& token_file) {
@@ -68,6 +71,56 @@ bool cmp(char* code, char test[]) {
     return true;
 }
 
+
+void generateRequest(std::string access_token, SSL* ssl) {
+    std::string request =
+        "GET /gmail/v1/users/me/messages?maxResults=1 HTTP/1.1\r\n"
+        "Host: www.googleapis.com\r\n"
+        "Authorization: Bearer " + access_token + "\r\n"
+        "Connection: keep-alive\r\n\r\n";
+
+
+    SSL_write(ssl, request.c_str(), request.size());
+} 
+
+
+std::string readHttpResponse(SSL* ssl) {
+    char buf[BUFFER_SIZE];
+    std::string headers;
+    size_t content_length = 0;
+
+    // --- Step 1: Read headers ---
+    while (true) {
+        int bytes = SSL_read(ssl, buf, sizeof(buf));
+        if (bytes <= 0) break;
+        headers.append(buf, bytes);
+
+        size_t pos = headers.find("\r\n\r\n");
+        if (pos != std::string::npos) {
+            std::string header_only = headers.substr(0, pos + 4);
+
+            // --- parse Content-Length ---
+            size_t cl_pos = header_only.find("Content-Length:");
+            if (cl_pos != std::string::npos) {
+                size_t endline = header_only.find("\r\n", cl_pos);
+                std::string cl_str = header_only.substr(cl_pos + 15, endline - (cl_pos + 15));
+                content_length = std::stoul(cl_str);
+            }
+            // Remove header from headers string
+            headers = headers.substr(pos + 4);
+            break;
+        }
+    }
+
+    // --- Step 2: Read body ---
+    while (headers.size() < content_length) {
+        int bytes = SSL_read(ssl, buf, sizeof(buf));
+        if (bytes <= 0) break;
+        headers.append(buf, bytes);
+    }
+
+    return headers; // full body
+}
 
 
 int main() {
@@ -132,37 +185,52 @@ int main() {
     }
 
 
-    // --- Get access token ---
-    std::string access_token = get_access_token("tokens/tokens0.json");
-    if (access_token.empty()) {
+    // --- Get access tokens ---
+    std::vector<std::string> access_tokens;
+    for (const auto& entry : fs::directory_iterator("tokens")) {
+        if (fs::is_regular_file(entry.status())) {
+            fs::path relative_path = entry.path(); 
+            relative_path = fs::relative(relative_path, fs::current_path());
+
+            std::cout << relative_path.string() << std::endl; 
+            access_tokens.push_back(get_access_token(relative_path.string()));
+        }
+    }
+
+
+    if (access_tokens.empty()) {
         std::cerr << "Failed to load access token\n";
         return 1;
     }
 
-    // --- Prepare HTTPS GET request with Authorization header ---
-    std::string request =
-        "GET /gmail/v1/users/me/messages?maxResults=10 HTTP/1.1\r\n"
-        "Host: www.googleapis.com\r\n"
-        "Authorization: Bearer " + access_token + "\r\n"
-        "Connection: close\r\n\r\n";
 
-    SSL_write(ssl, request.c_str(), request.size());
+    for (const auto &token : access_tokens) {
+        generateRequest(token, ssl);
+        std::string body = readHttpResponse(ssl);
 
-    // --- Read response ---
-    char buffer[4096];
-    int bytes;
-    while ((bytes = SSL_read(ssl, buffer, sizeof(buffer)-1)) > 0) {
-        buffer[bytes] = '\0';
-
-
-        int code = checkAuthValidation(buffer);
-        if (code>VALID_HTTP_RESPONSE_CODE) {
-            std::cerr << "something went wrong in the http request idk\n";
-            return 1;
-        }
-        
-        std::cout << buffer << std::endl;
+        std::cout << "Response body:\n" << body << "\n\n";
     }
+
+    // --- Prepare HTTPS GET request with Authorization header ---
+    // std::vector<std::array<char, BUFFER_SIZE>> buffers(access_tokens.size());
+
+    // for (size_t i = 0; i < access_tokens.size(); ++i) {
+    //     char* buf = buffers[i].data();
+    //     generateRequest(access_tokens[i], ssl);
+
+    //     int bytes;
+    //     while ((bytes = SSL_read(ssl, buf, BUFFER_SIZE - 1)) > 0) {
+    //         buf[bytes] = '\0';
+
+    //         int code = checkAuthValidation(buf);
+    //         if (code > VALID_HTTP_RESPONSE_CODE) {
+    //             std::cerr << "something went wrong\n";
+    //             return 1;
+    //         }
+
+    //         std::cout << buf << std::endl;
+    //     }
+    // }
 
 
 
