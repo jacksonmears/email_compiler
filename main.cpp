@@ -8,10 +8,17 @@
 #include "external/json.hpp"  // https://github.com/nlohmann/json
 #include <thread>
 #include <mutex>
+#include <vector>
+#include <optional>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
+#include <filesystem>
+#include <windows.h>
+#include <shellapi.h>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
-
 
 constexpr uint16_t VALID_HTTP_RESPONSE_CODE = 299;
 constexpr int BUFFER_SIZE = 4096;
@@ -79,23 +86,6 @@ SSL* createSSLConnection(const std::string& host, uint16_t port, SOCKET& out_soc
 }
 
 
-
-// char* checkAuthValidation(char* buffer) {
-//     char* it = buffer;
-//     while (*++it != ' ');
-
-//     ++it;
-
-//     char* code = new char[4];
-//     code[3] = '\0';
-//     for (int i = 0; i < 3; ++i) {
-//         code[i] = *it++;
-//     }
-
-//     return code;
-// }
-
-
 uint16_t checkAuthValidation(char* buffer) {
     char* it = buffer;
     while (*++it != ' ');
@@ -112,7 +102,6 @@ uint16_t checkAuthValidation(char* buffer) {
 }
 
 
-
 bool cmp(char* code, char test[]) {
     for (int i = 0; code[i]!='\0'; ++i) {
         if (code[i] != test[i]) return false;
@@ -121,28 +110,27 @@ bool cmp(char* code, char test[]) {
 }
 
 
+// --- small change here: request format=full so payload is returned ---
 void generateRequest(std::string access_token, SSL* ssl) {
     std::string request =
-        "GET /gmail/v1/users/me/messages?maxResults=10 HTTP/1.1\r\n"
+        "GET /gmail/v1/users/me/messages?maxResults=5 HTTP/1.1\r\n"
         "Host: www.googleapis.com\r\n"
         "Authorization: Bearer " + access_token + "\r\n"
         "Connection: keep-alive\r\n\r\n";
 
-
     SSL_write(ssl, request.c_str(), request.size());
 }
 
-
+// include format=full on thread fetch so Gmail returns message payloads
 void generateThreadRequest(const std::string& access_token, const std::string& thread_id, SSL* ssl) {
     std::string request =
-        "GET /gmail/v1/users/me/threads/" + thread_id + " HTTP/1.1\r\n"
+        "GET /gmail/v1/users/me/threads/" + thread_id + "?format=full HTTP/1.1\r\n"
         "Host: www.googleapis.com\r\n"
         "Authorization: Bearer " + access_token + "\r\n"
         "Connection: keep-alive\r\n\r\n";
 
     SSL_write(ssl, request.c_str(), request.size());
 }
-
 
 
 void getThreadIDs(std::string& body, std::vector<std::string>& threadIDs) {
@@ -158,44 +146,6 @@ void getThreadIDs(std::string& body, std::vector<std::string>& threadIDs) {
         ++i;
     }
 }
-
-// std::string readHttpResponse(SSL* ssl) {
-//     char buf[BUFFER_SIZE];
-//     std::string headers;
-//     size_t content_length = 0;
-
-//     // --- Step 1: Read headers ---
-//     while (true) {
-//         int bytes = SSL_read(ssl, buf, sizeof(buf));
-//         if (bytes <= 0) break;
-//         headers.append(buf, bytes);
-
-//         size_t pos = headers.find("\r\n\r\n");
-//         if (pos != std::string::npos) {
-//             std::string header_only = headers.substr(0, pos + 4);
-
-//             // --- parse Content-Length ---
-//             size_t cl_pos = header_only.find("Content-Length:");
-//             if (cl_pos != std::string::npos) {
-//                 size_t endline = header_only.find("\r\n", cl_pos);
-//                 std::string cl_str = header_only.substr(cl_pos + 15, endline - (cl_pos + 15));
-//                 content_length = std::stoul(cl_str);
-//             }
-//             // Remove header from headers string
-//             headers = headers.substr(pos + 4);
-//             break;
-//         }
-//     }
-
-//     // --- Step 2: Read body ---
-//     while (headers.size() < content_length) {
-//         int bytes = SSL_read(ssl, buf, sizeof(buf));
-//         if (bytes <= 0) break;
-//         headers.append(buf, bytes);
-//     }
-
-//     return headers; // full body
-// }
 
 
 std::string parseChunkedBody(const std::string& raw) {
@@ -291,6 +241,166 @@ std::string readHttpResponse(SSL* ssl) {
 
 std::mutex cout_mutex;
 
+// ------------------ new helpers for base64url decode + HTML extraction + display ------------------
+
+// Convert base64url string to bytes
+std::vector<unsigned char> base64url_decode_bytes(const std::string& input) {
+    // Convert base64url -> base64
+    std::string s = input;
+    for (char &c : s) {
+        if (c == '-') c = '+';
+        else if (c == '_') c = '/';
+    }
+    // Add padding
+    size_t pad = (4 - (s.size() % 4)) % 4;
+    s.append(pad, '=');
+
+    // decoding table
+    static unsigned char dtable[256];
+    static bool inited = false;
+    if (!inited) {
+        std::fill(std::begin(dtable), std::end(dtable), 0x80);
+        for (unsigned char i = 'A'; i <= 'Z'; ++i) dtable[i] = i - 'A';
+        for (unsigned char i = 'a'; i <= 'z'; ++i) dtable[i] = i - 'a' + 26;
+        for (unsigned char i = '0'; i <= '9'; ++i) dtable[i] = i - '0' + 52;
+        dtable[(unsigned char)'+'] = 62;
+        dtable[(unsigned char)'/'] = 63;
+        dtable[(unsigned char)'='] = 0;
+        inited = true;
+    }
+
+    std::vector<unsigned char> out;
+    out.reserve((s.size() * 3) / 4);
+
+    unsigned int val = 0;
+    int valb = -8;
+    for (unsigned char c : s) {
+        if (dtable[c] & 0x80) continue;
+        val = (val << 6) + dtable[c];
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back((unsigned char)((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
+// Recursively search a payload part for text/html (preferred) or text/plain (fallback).
+// Returns the base64url encoded data string if found.
+std::optional<std::pair<std::string, std::string>> find_html_or_text_part(const json& part) {
+    // returns pair<mimeType, data>
+    if (!part.is_object()) return std::nullopt;
+
+    if (part.contains("mimeType") && part.contains("body") && part["body"].contains("data")) {
+        std::string mime = part["mimeType"].get<std::string>();
+        std::string data = part["body"]["data"].get<std::string>();
+        if (mime == "text/html") return std::make_pair(mime, data);
+        if (mime == "text/plain") return std::make_pair(mime, data); // candidate
+    }
+
+    // check nested parts, prefer html
+    if (part.contains("parts") && part["parts"].is_array()) {
+        std::optional<std::pair<std::string, std::string>> plainCandidate;
+        for (const auto &sub : part["parts"]) {
+            if (!sub.is_object()) continue;
+            // If sub is html, return immediately
+            if (sub.contains("mimeType") && sub["mimeType"].is_string() &&
+                sub["mimeType"].get<std::string>() == "text/html" &&
+                sub.contains("body") && sub["body"].contains("data")) {
+                return std::make_pair(std::string("text/html"), sub["body"]["data"].get<std::string>());
+            }
+            auto res = find_html_or_text_part(sub);
+            if (res.has_value()) {
+                // If res is html, return immediately; otherwise store plain as candidate.
+                if (res->first == "text/html") return res;
+                if (res->first == "text/plain" && !plainCandidate.has_value()) plainCandidate = res;
+            }
+        }
+        if (plainCandidate.has_value()) return plainCandidate;
+    }
+
+    return std::nullopt;
+}
+
+// Write HTML string to unique temp file and open in default browser.
+// Returns true on success.
+bool write_and_open_html(const std::string &html_text, const std::string &hintName) {
+    char tmpPath[MAX_PATH];
+    if (!GetTempPathA(MAX_PATH, tmpPath)) return false;
+
+    auto now = std::chrono::system_clock::now();
+    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+    std::ostringstream ss;
+    ss << tmpPath << "gmail_thread_" << hintName << "_" << millis << ".html";
+    std::string path = ss.str();
+
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs.is_open()) return false;
+    ofs.write(html_text.data(), (std::streamsize)html_text.size());
+    ofs.close();
+
+    HINSTANCE r = ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    return ((intptr_t)r > 32);
+}
+
+// Given the thread JSON (response from GET /users/me/threads/{id}?format=full),
+// find HTML/text parts for each message and open them in the default browser.
+// threadHint used to name temp files.
+void present_thread_html(const json &threadJson, const std::string &threadHint="thread") {
+    if (!threadJson.contains("messages") || !threadJson["messages"].is_array()) {
+        std::cerr << "No messages in thread\n";
+        return;
+    }
+
+    int idx = 0;
+    for (const auto &msg : threadJson["messages"]) {
+        ++idx;
+        if (!msg.contains("payload") || !msg["payload"].is_object()) continue;
+        const auto &payload = msg["payload"];
+
+        auto partOpt = find_html_or_text_part(payload);
+        if (!partOpt.has_value()) {
+            // If body is not inline, message might have an attachment body (attachmentId) - skip for now.
+            continue;
+        }
+
+        std::string mime = partOpt->first;
+        std::string base64url = partOpt->second;
+
+        auto bytes = base64url_decode_bytes(base64url);
+        std::string text(bytes.begin(), bytes.end());
+
+        bool isPlain = (mime == "text/plain");
+        if (isPlain) {
+            std::string wrapped;
+            wrapped.reserve(text.size() + 64);
+            wrapped += "<html><body><pre style=\"white-space:pre-wrap;font-family:monospace;\">";
+            // naive HTML-escape for safety
+            for (unsigned char c : text) {
+                switch (c) {
+                    case '&': wrapped += "&amp;"; break;
+                    case '<': wrapped += "&lt;"; break;
+                    case '>': wrapped += "&gt;"; break;
+                    default: wrapped.push_back((char)c); break;
+                }
+            }
+            wrapped += "</pre></body></html>";
+            text.swap(wrapped);
+        }
+
+        std::ostringstream hint;
+        hint << threadHint << "_msg" << idx;
+        if (!write_and_open_html(text, hint.str())) {
+            std::lock_guard<std::mutex> lock(cout_mutex);
+            std::cerr << "Failed to write/open HTML for " << threadHint << " message " << idx << "\n";
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void fetchThreadInfo(const std::string& token, const std::string& threadID) {
     SOCKET sock;
     SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock);
@@ -299,12 +409,21 @@ void fetchThreadInfo(const std::string& token, const std::string& threadID) {
     generateThreadRequest(token, threadID, ssl);
     std::string response = readHttpResponse(ssl);
 
-    // Lock console output
-    static std::mutex cout_mutex;
     {
         std::lock_guard<std::mutex> lock(cout_mutex);
         std::cout << "ThreadID: " << threadID << "\n";
-        // std::cout << response << "\n"; // optional
+    }
+
+    // Parse response body into JSON and present HTML
+    try {
+        // response should already be the HTTP body (your readHttpResponse strips headers)
+        json threadJson = json::parse(response);
+        present_thread_html(threadJson, threadID);
+    } catch (const std::exception &ex) {
+        std::lock_guard<std::mutex> lock(cout_mutex);
+        std::cerr << "Failed to parse thread JSON for " << threadID << ": " << ex.what() << "\n";
+        // optionally print response for debugging (commented)
+        // std::cerr << response << "\n";
     }
 
     SSL_shutdown(ssl);
@@ -339,9 +458,6 @@ int main() {
         return 1;
     }
 
-    
-
-
     // --- Get access tokens ---
     std::vector<std::string> access_tokens;
     for (const auto& entry : fs::directory_iterator("tokens")) {
@@ -359,15 +475,6 @@ int main() {
         std::cerr << "Failed to load access token\n";
         return 1;
     }
-
-
-    // std::ofstream thread_file("thread_ids.txt", std::ios::app); // append mode
-    // if (!thread_file.is_open()) {
-    //     std::cerr << "Failed to open thread_ids.txt for writing\n";
-    //     return 1;
-    // }
-
-
 
     std::vector<std::thread> workers;
 
@@ -396,14 +503,6 @@ int main() {
     for (auto &t : workers) {
         t.join();
     }
-
-
-    
-
-    // for (auto s : threadIDs) {
-    //     std::cout << s << std::endl;
-    // }
-
 
     WSACleanup();
 
