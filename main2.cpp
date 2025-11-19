@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include "external/json.hpp"  // https://github.com/nlohmann/json
 #include <thread>
 #include <mutex>
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <windows.h>
 #include <shellapi.h>
+#include "include/threadInfo.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -24,6 +26,11 @@ constexpr uint16_t VALID_HTTP_RESPONSE_CODE = 299;
 constexpr int BUFFER_SIZE = 4096;
 
 std::mutex cout_mutex;
+std::mutex storage_mutex;
+
+
+// Forward declaration
+void ShowThreadListGUI(const std::vector<ThreadInfo>& threads);
 
 // ------------------ Utility ------------------
 
@@ -166,7 +173,7 @@ std::string readHttpResponse(SSL* ssl) {
 
 void generateRequest(const std::string& token, SSL* ssl) {
     std::string req =
-        "GET /gmail/v1/users/me/messages?maxResults=1 HTTP/1.1\r\n"
+        "GET /gmail/v1/users/me/messages?maxResults=50 HTTP/1.1\r\n"
         "Host: www.googleapis.com\r\n"
         "Authorization: Bearer " + token + "\r\n"
         "Connection: keep-alive\r\n\r\n";
@@ -238,6 +245,14 @@ std::vector<unsigned char> base64url_decode_bytes(const std::string& input) {
     }
     return out;
 }
+
+
+std::string base64url_decode_string(const std::string& input) {
+    std::vector<unsigned char> bytes = base64url_decode_bytes(input);
+    return std::string(bytes.begin(), bytes.end());
+}
+
+
 
 // ------------------ MIME / HTML Handling ------------------
 
@@ -356,14 +371,21 @@ void present_thread_html(const json& threadJson, const std::string& threadHint="
 
 // ------------------ Thread Fetch ------------------
 
-void fetchThreadInfo(const std::string& token, const std::string& threadID, SSL_CTX* ctx) {
+void fetchThreadInfo(const std::string& token, const std::string& threadID, SSL_CTX* ctx, std::vector<ThreadInfo>& threadResults) {
     SOCKET sock;
     SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock, ctx);
     if (!ssl) return;
 
     generateThreadRequest(token, threadID, ssl);
     std::string response = readHttpResponse(ssl);
-    // std::cout << response << std::endl;
+
+    // Debug print – so you can inspect the JSON structure
+    // {
+    //     std::lock_guard<std::mutex> lock(cout_mutex);
+    //     std::cout << "Raw Thread Response (" << threadID << "):\n"
+    //             << response << "\n";
+    // }
+
 
     try {
         // Trim leading whitespace for safety
@@ -371,7 +393,134 @@ void fetchThreadInfo(const std::string& token, const std::string& threadID, SSL_
         if (start != std::string::npos) response = response.substr(start);
 
         json threadJson = json::parse(response);
-        present_thread_html(threadJson, threadID);
+
+
+
+
+
+
+
+
+
+
+
+        ThreadInfo threadInfo;
+        threadInfo.threadId = threadID;
+
+        // snippet (short preview)
+        if (threadJson.contains("snippet"))
+            threadInfo.snippet = threadJson["snippet"].get<std::string>();
+
+        // historyId
+        if (threadJson.contains("historyId"))
+            threadInfo.historyId = std::stoi(threadJson["historyId"].get<std::string>());
+
+        long long latestTs = 0;
+
+        // Parse messages array
+        if (threadJson.contains("messages")) {
+            for (auto& m : threadJson["messages"]) {
+                MessageInfo msg;
+
+                if (m.contains("id"))
+                    msg.id = m["id"].get<std::string>();
+
+                // internalDate (epoch in ms)
+                if (m.contains("internalDate")) {
+                    msg.internalDate = std::stoll(m["internalDate"].get<std::string>());
+                    if (msg.internalDate > latestTs)
+                        latestTs = msg.internalDate;
+                }
+
+                // labels
+                if (m.contains("labelIds")) {
+                    for (auto& lbl : m["labelIds"])
+                        msg.labelIDs.push_back(lbl.get<std::string>());
+                }
+
+                // payload → headers & body
+                if (m.contains("payload")) {
+                    auto& payload = m["payload"];
+
+                    // Extract headers
+                    if (payload.contains("headers")) {
+                        for (auto& h : payload["headers"]) {
+                            std::string name = h["name"].get<std::string>();
+                            std::string value = h["value"].get<std::string>();
+
+                            if (name == "From") msg.from = value;
+                            else if (name == "To") msg.to = value;
+                            else if (name == "Subject") msg.subject = value;
+                        }
+                    }
+
+                    // Extract body
+                    auto extractBody = [&](const json& part) {
+                        if (part.contains("body") && part["body"].contains("data")) {
+                            std::string encoded = part["body"]["data"].get<std::string>();
+                            return base64url_decode_string(encoded);
+                        }
+                        return std::string();
+                    };
+
+
+                    // body may appear in multipart parts
+                    if (payload.contains("parts")) {
+                        for (auto& part : payload["parts"]) {
+                            std::string mime = part.value("mimeType", "");
+                            if (mime == "text/plain") msg.bodyPlain = extractBody(part);
+                            else if (mime == "text/html") msg.bodyHtml = extractBody(part);
+                        }
+                    } else {
+                        // Single part
+                        std::string mime = payload.value("mimeType", "");
+                        if (mime == "text/plain") msg.bodyPlain = extractBody(payload);
+                        else if (mime == "text/html") msg.bodyHtml = extractBody(payload);
+                    }
+                }
+
+                threadInfo.messages.push_back(msg);
+                if (!threadInfo.newest.has_value() || msg.internalDate > threadInfo.newest->internalDate) threadInfo.newest = msg;
+            }
+        }
+
+        threadInfo.latestTimestamp = latestTs;
+
+        // Compute thread label union
+        std::unordered_set<std::string> labelUnion;
+        for (auto& msg : threadInfo.messages) {
+            for (auto& lbl : msg.labelIDs)
+                labelUnion.insert(lbl);
+        }
+        threadInfo.threadLabelSummary.assign(labelUnion.begin(), labelUnion.end());
+
+        // TODO: push into global thread list
+        {
+            std::lock_guard<std::mutex> lock(storage_mutex);
+            threadResults.push_back(threadInfo);
+        }
+
+
+
+        // if (msg.id.empty()) {
+        //     std::lock_guard<std::mutex> lock(cout_mutex);
+        //     std::cerr << "Warning: message in thread " << threadID << " missing ID\n";
+        // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // present_thread_html(threadJson, threadID);
     } catch (const std::exception& ex) {
         std::lock_guard<std::mutex> lock(cout_mutex);
         std::cerr << "Failed to parse thread JSON (" << threadID << "): " << ex.what() << "\n";
@@ -414,7 +563,7 @@ int main() {
     }
 
     std::vector<std::thread> workers;
-    std::vector<std::vector<std::string>> threadIDs; // used to be inside for each loop scope to localize vector for threads but we are attempting to bypass threads for now
+    std::vector<ThreadInfo> threadResults;
     for (const auto& token : tokens) {
         SOCKET sock;
         SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock, ctx);
@@ -425,20 +574,41 @@ int main() {
         std::vector<std::string> localThreadIDs;
         getThreadIDs(body, localThreadIDs);
 
-        threadIDs.emplace_back(localThreadIDs);
-
         SSL_shutdown(ssl);
         SSL_free(ssl);
         closesocket(sock);
 
-        // for (const std::string& id : localThreadIDs) workers.emplace_back(fetchThreadInfo, token, id, ctx);
+        for (const std::string& id : localThreadIDs) workers.emplace_back(fetchThreadInfo, token, id, ctx, ref(threadResults));
     }
 
-    // for (auto& t : workers) t.join();
+    for (auto& t : workers) t.join();
 
-    for (std::vector<std::string> v : threadIDs) 
-        for (std::string s : v) 
-            std::cout << s << std::endl;
+    sort
+    (
+        threadResults.begin(), threadResults.end(), 
+        [](ThreadInfo& a, ThreadInfo& b){ 
+            return a.latestTimestamp > b.latestTimestamp; 
+        }
+    );
+
+    for (size_t i = 1; i < threadResults.size(); ++i) if (threadResults[i].threadId == threadResults[i-1].threadId) threadResults[i].isDuplicate = true;
+
+
+    std::vector<ThreadInfo> uniqueThreadIDs;
+    for (ThreadInfo& t : threadResults) {
+        if (!t.isDuplicate && !t.threadId.empty()) {
+            uniqueThreadIDs.emplace_back(t);
+        }
+    }
+
+    ShowThreadListGUI(uniqueThreadIDs);
+
+
+    // for (ThreadInfo& t : threadResults) if (!t.isDuplicate) {
+    //     for (MessageInfo m : t.messages) if (!m.id.empty()){
+    //         std::cout << m.id << " ";
+    //     }std::cout << "\n";
+    // }
 
 
 
