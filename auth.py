@@ -31,12 +31,15 @@ def create_or_update_token(creds_file, token_path, token_file):
     print(f"Token ready: {full_token_path}")
 
 if __name__ == "__main__":
-    try:
-        num_emails = len([i for i in os.listdir("tokens")])
-        add = int(input("Do you want to add an email(s)? Input the number you'd like to add: "))
-    except ValueError:
-        print("Invalid number", file=sys.stderr)
-        sys.exit(2)
+    # try:
+    #     num_emails = len([i for i in os.listdir("tokens")])
+    #     add = int(input("Do you want to add an email(s)? Input the number you'd like to add: "))
+    # except ValueError:
+    #     print("Invalid number", file=sys.stderr)
+    #     sys.exit(2)
+
+    num_emails = 2
+    add = 0
 
     for i in range(num_emails+add):
         create_or_update_token("credentials.json", "tokens", f"tokens{i}.json")

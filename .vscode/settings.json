@@ -68,6 +68,7 @@
         "variant": "cpp",
         "chrono": "cpp",
         "condition_variable": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "unordered_set": "cpp"
     }
 }
