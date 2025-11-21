@@ -2,6 +2,9 @@
 #include <string>
 #include <vector>
 #include "include/threadInfo2.h"
+// #include <WebView2.h>
+
+// ICoreWebView2* webView = nullptr;
 
 // Globals
 HWND hListBox;
@@ -47,8 +50,10 @@ LRESULT CALLBACK ThreadListWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 void PopulateListBoxWithThreads()
 {
     SendMessage(hListBox, LB_RESETCONTENT, 0, 0);
-    for (const auto& t : threadInfo)
-        SendMessage(hListBox, LB_ADDSTRING, 0, (LPARAM)t.messages.back().subject.c_str());
+    for (const auto& t : threadInfo) {
+        std::string msg = t.messages[0].from + " " + t.messages[0].subject;
+        SendMessage(hListBox, LB_ADDSTRING, 0, (LPARAM)msg.c_str());
+    }
 
     showingThreadMessages = false;
     ShowWindow(hBackButton, SW_HIDE);
@@ -60,8 +65,12 @@ void PopulateListBoxWithMessages(const ThreadInfo& thread)
     SendMessage(hListBox, LB_RESETCONTENT, 0, 0);
     for (const auto& m : thread.messages)
     {
-        if (!m.id.empty())
-            SendMessage(hListBox, LB_ADDSTRING, 0, (LPARAM)m.subject.c_str());
+        if (!m.id.empty()) {
+            std::string msg;
+            for (auto c : m.bodyHtml) msg += c;
+            SendMessage(hListBox, LB_ADDSTRING, 0, (LPARAM)msg.c_str());
+        }
+
     }
 
     showingThreadMessages = true;
@@ -86,7 +95,7 @@ void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults)
         CLASS_NAME,
         "Gmail Threads",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 400, 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, 800, 1200,
         NULL, NULL, hInstance, NULL
     );
 
@@ -97,17 +106,18 @@ void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults)
         "LISTBOX",
         "",
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY,
-        10, 10, 360, 500,
+        10, 10, 780, 1120,  // fits within 800x1200 client area
         hwnd, NULL, hInstance, NULL
     );
 
     hBackButton = CreateWindowEx(
         0, "BUTTON", "Back",
         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-        10, 520, 100, 30,
+        10, 1140, 100, 30, // placed below listbox
         hwnd, NULL, hInstance, NULL
     );
     ShowWindow(hBackButton, SW_HIDE);
+
 
     PopulateListBoxWithThreads();
 

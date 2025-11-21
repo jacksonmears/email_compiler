@@ -1,0 +1,60 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f1f3f4;
+}
+
+header {
+    background-color: #4285f4;
+    color: white;
+    padding: 15px 20px;
+    font-size: 1.5em;
+}
+
+#thread-list {
+    max-width: 800px;
+    margin: 20px auto;
+}
+
+.thread {
+    background-color: white;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    padding: 10px 15px;
+}
+
+.thread-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.thread-header:hover {
+    background-color: #f0f0f0;
+}
+
+.messages {
+    margin-top: 10px;
+    display: none;
+}
+
+.message {
+    padding: 8px;
+    border-top: 1px solid #ddd;
+}
+
+.message p {
+    margin: 4px 0;
+}
+
+.message .subject {
+    font-weight: bold;
+}
+
+.message .body {
+    color: #333;
+    white-space: pre-wrap;
+}

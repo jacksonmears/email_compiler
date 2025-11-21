@@ -14,8 +14,87 @@ using json = nlohmann::json;
 constexpr int BUFFER_SIZE = 4096;
 
 // forward declaration
-void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults);
+// void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults);
+void runServer(const std::vector<ThreadInfo>& threads, int port = 8080);
 
+// std::vector<unsigned char> base64url_decode_bytes(const std::string& input) {
+//     std::string s = input;
+//     for (char &c : s) {
+//         if (c == '-') c = '+';
+//         else if (c == '_') c = '/';
+//     }
+//     size_t pad = (4 - (s.size() % 4)) % 4;
+//     s.append(pad, '=');
+
+//     static unsigned char dtable[256];
+//     static bool inited = false;
+//     if (!inited) {
+//         std::fill(std::begin(dtable), std::end(dtable), 0x80);
+//         for (unsigned char i = 'A'; i <= 'Z'; ++i) dtable[i] = i - 'A';
+//         for (unsigned char i = 'a'; i <= 'z'; ++i) dtable[i] = i - 'a' + 26;
+//         for (unsigned char i = '0'; i <= '9'; ++i) dtable[i] = i - '0' + 52;
+//         dtable[(unsigned char)'+'] = 62;
+//         dtable[(unsigned char)'/'] = 63;
+//         dtable[(unsigned char)'='] = 0;
+//         inited = true;
+//     }
+
+//     std::vector<unsigned char> out;
+//     out.reserve((s.size() * 3) / 4);
+
+//     unsigned int val = 0;
+//     int valb = -8;
+//     for (unsigned char c : s) {
+//         if (dtable[c] & 0x80) continue;
+//         val = (val << 6) + dtable[c];
+//         valb += 6;
+//         if (valb >= 0) {
+//             out.push_back((unsigned char)((val >> valb) & 0xFF));
+//             valb -= 8;
+//         }
+//     }
+//     return out;
+// }
+
+
+std::string base64url_decode_to_string(const std::string& input) {
+    std::string s = input;
+    for (char &c : s) {
+        if (c == '-') c = '+';
+        else if (c == '_') c = '/';
+    }
+    size_t pad = (4 - (s.size() % 4)) % 4;
+    s.append(pad, '=');
+
+    static unsigned char dtable[256];
+    static bool inited = false;
+    if (!inited) {
+        std::fill(std::begin(dtable), std::end(dtable), 0x80);
+        for (unsigned char i = 'A'; i <= 'Z'; ++i) dtable[i] = i - 'A';
+        for (unsigned char i = 'a'; i <= 'z'; ++i) dtable[i] = i - 'a' + 26;
+        for (unsigned char i = '0'; i <= '9'; ++i) dtable[i] = i - '0' + 52;
+        dtable[(unsigned char)'+'] = 62;
+        dtable[(unsigned char)'/'] = 63;
+        dtable[(unsigned char)'='] = 0;
+        inited = true;
+    }
+
+    std::string out;
+    out.reserve((s.size() * 3) / 4);
+
+    unsigned int val = 0;
+    int valb = -8;
+    for (unsigned char c : s) {
+        if (dtable[c] & 0x80) continue;
+        val = (val << 6) + dtable[c];
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back((char)((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
 
 
 // struct MessageInfo {
@@ -245,7 +324,7 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
             if (m.contains("id")) msg.id = m["id"].get<std::string>();
             if (m.contains("internalDate")) {
-                msg.internalDate = std::stoll(m["internalDate"].get<std::string>());
+                msg.internalDate = m["internalDate"].get<std::string>();
             }
             if (m.contains("labelIds")) {
                 for (auto& lbl : m["labelIds"])
@@ -278,11 +357,13 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
                             if (check == "text/plain") {
                                 msg.bodyPlain_size = part["body"]["size"].get<long long>();
+                                // msg.bodyPlain = base64url_decode_bytes(part["body"]["data"].get<std::string>());
                                 msg.bodyPlain = part["body"]["data"].get<std::string>();
                             } 
                             else if (check == "text/html") {
                                 msg.bodyHtml_size = part["body"]["size"].get<long long>();
-                                msg.bodyHtml= part["body"]["data"].get<std::string>();
+                                // msg.bodyHtml = base64url_decode_bytes(part["body"]["data"].get<std::string>());
+                                msg.bodyHtml = part["body"]["data"].get<std::string>();
                             }
                         }
                     }
@@ -300,44 +381,7 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
 
 
-std::vector<unsigned char> base64url_decode_bytes(const std::string& input) {
-    std::string s = input;
-    for (char &c : s) {
-        if (c == '-') c = '+';
-        else if (c == '_') c = '/';
-    }
-    size_t pad = (4 - (s.size() % 4)) % 4;
-    s.append(pad, '=');
 
-    static unsigned char dtable[256];
-    static bool inited = false;
-    if (!inited) {
-        std::fill(std::begin(dtable), std::end(dtable), 0x80);
-        for (unsigned char i = 'A'; i <= 'Z'; ++i) dtable[i] = i - 'A';
-        for (unsigned char i = 'a'; i <= 'z'; ++i) dtable[i] = i - 'a' + 26;
-        for (unsigned char i = '0'; i <= '9'; ++i) dtable[i] = i - '0' + 52;
-        dtable[(unsigned char)'+'] = 62;
-        dtable[(unsigned char)'/'] = 63;
-        dtable[(unsigned char)'='] = 0;
-        inited = true;
-    }
-
-    std::vector<unsigned char> out;
-    out.reserve((s.size() * 3) / 4);
-
-    unsigned int val = 0;
-    int valb = -8;
-    for (unsigned char c : s) {
-        if (dtable[c] & 0x80) continue;
-        val = (val << 6) + dtable[c];
-        valb += 6;
-        if (valb >= 0) {
-            out.push_back((unsigned char)((val >> valb) & 0xFF));
-            valb -= 8;
-        }
-    }
-    return out;
-}
 
 
 // ------------------ Main ------------------
@@ -442,14 +486,15 @@ int main() {
     // for (auto t : threadInfo) if (t.messages.size() > 1) {
     //     // std::cout << t.messages[0].subject << ": ";
     //     for (auto m : t.messages) {
-    //         std::vector<unsigned char> temp = base64url_decode_bytes(m.bodyPlain);
-    //         for (unsigned char c : temp) std::cout << c;
-    //         std::cout << "000\n";
+    //         for (auto c : m.bodyHtml) std::cout << c;
+    //         std::cout << std::endl;
     //     }
     // }
 
 
-    ShowThreadListGUI(threadInfo);
+
+    // ShowThreadListGUI(threadInfo);
+    runServer(threadInfo, 8080);
 
 
     SSL_CTX_free(ctx);

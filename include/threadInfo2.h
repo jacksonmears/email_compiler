@@ -12,8 +12,10 @@ struct MessageInfo {
     std::string to;
     std::string subject;
     long long bodyPlain_size;
+    // std::vector<unsigned char> bodyPlain;
     std::string bodyPlain;
     long long bodyHtml_size;
+    // std::vector<unsigned char> bodyHtml;
     std::string bodyHtml;
 };
 
