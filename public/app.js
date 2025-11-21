@@ -1,5 +1,5 @@
 // Fetch threads JSON from the server
-fetch('http://localhost:8080')
+fetch('api/threads')
     .then(res => res.json())
     .then(threads => renderThreads(threads))
     .catch(err => console.error("Error fetching threads:", err));
@@ -22,34 +22,34 @@ function renderThreads(threads) {
         const messagesDiv = document.createElement('div');
         messagesDiv.classList.add('messages');
 
-        if (thread.messages.length === 0) {
-            const emptyMsg = document.createElement('p');
-            emptyMsg.textContent = "(No messages)";
-            messagesDiv.appendChild(emptyMsg);
+        if (!thread.messages || thread.messages.length === 0) {
+            messagesDiv.innerHTML = "<p>(No messages)</p>";
         }
 
         thread.messages.forEach(msg => {
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message');
 
-            const from = document.createElement('p');
-            from.textContent = `From: ${msg.from}`;
-            msgDiv.appendChild(from);
+            msgDiv.innerHTML += `<p>From: ${msg.from}</p>`;
+            msgDiv.innerHTML += `<p>To: ${msg.to}</p>`;
+            msgDiv.innerHTML += `<p class="subject">Subject: ${msg.subject}</p>`;
 
-            const to = document.createElement('p');
-            to.textContent = `To: ${msg.to}`;
-            msgDiv.appendChild(to);
+            const bodyDiv = document.createElement('div');
+            bodyDiv.classList.add('body');
 
-            const subject = document.createElement('p');
-            subject.textContent = `Subject: ${msg.subject}`;
-            subject.classList.add('subject');
-            msgDiv.appendChild(subject);
+            // Prefer HTML body — fallback to plain text
+            const decodedHtml = msg.bodyHtml ? decodeBase64Url(msg.bodyHtml) : null;
+            const decodedText = msg.bodyPlain ? decodeBase64Url(msg.bodyPlain) : "(No content)";
 
-            const body = document.createElement('p');
-            body.textContent = decodeBase64(msg.bodyPlain); // decode Base64URL
-            body.classList.add('body');
-            msgDiv.appendChild(body);
+            if (decodedHtml) {
+                // Sanitize ➜ Render HTML
+                bodyDiv.innerHTML = DOMPurify.sanitize(decodedHtml);
+            } else {
+                // Render text safely
+                bodyDiv.textContent = decodedText;
+            }
 
+            msgDiv.appendChild(bodyDiv);
             messagesDiv.appendChild(msgDiv);
         });
 
@@ -57,24 +57,30 @@ function renderThreads(threads) {
 
         // Toggle messages on header click
         header.addEventListener('click', () => {
-            messagesDiv.style.display = messagesDiv.style.display === 'none' ? 'block' : 'none';
+            messagesDiv.style.display =
+                messagesDiv.style.display === 'none' ? 'block' : 'none';
         });
 
         container.appendChild(threadDiv);
     });
 }
 
-// Helper: decode Base64URL to readable text
-function decodeBase64(base64url) {
-    if (!base64url) return '';
+// Gmail Base64URL decoding (UTF-8 safe)
+function decodeBase64Url(encoded) {
+    if (!encoded) return "";
 
-    // Convert from Base64URL to standard Base64
-    let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4) base64 += '=';
+    // Convert base64url → base64
+    encoded = encoded.replace(/-/g, '+').replace(/_/g, '/');
 
-    try {
-        return decodeURIComponent(escape(atob(base64)));
-    } catch (e) {
-        return "(Could not decode content)";
+    // Add missing padding
+    while (encoded.length % 4) {
+        encoded += '=';
     }
+
+    // Decode base64 → bytes
+    const str = atob(encoded);
+    const bytes = Uint8Array.from(str, c => c.charCodeAt(0));
+
+    // Convert UTF-8 bytes → string
+    return new TextDecoder('utf-8').decode(bytes);
 }

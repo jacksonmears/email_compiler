@@ -16,7 +16,7 @@ using json = nlohmann::json;
 
 json messageToJson(const MessageInfo& msg) {
     return {
-        {"internalDate", msg.internalDate},
+        // {"internalDate", msg.internalDate},
         {"id", msg.id},
         {"labelIds", msg.labelIds},
         {"from", msg.from},
@@ -86,49 +86,137 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
     // Open the default browser automatically
     ShellExecuteA(nullptr, "open", "http://localhost:8080", nullptr, nullptr, SW_SHOWNORMAL);
 
+    // while (true) {
+    //     SOCKET client_sock = accept(listen_sock, nullptr, nullptr);
+    //     if (client_sock == INVALID_SOCKET) continue;
+
+    //     char buffer[1024];
+    //     int bytes = recv(client_sock, buffer, sizeof(buffer), 0);
+    //     if (bytes <= 0) {
+    //         closesocket(client_sock);
+    //         continue;
+    //     }
+
+
+    //     for (auto& t : threads) {
+    //         for (auto& m : t.messages) {
+    //             for (char c : m.bodyPlain) {
+    //                 if ((c & 0x80) != 0) std::cout << "Non-ASCII char found in " << t.threadId << "\n";
+    //             }
+    //         }
+    //     }
+
+        
+    //     std::string jsonResponse = threadsToJson(threads).dump();
+
+    //     std::string response =
+    //         "HTTP/1.1 200 OK\r\n"
+    //         "Content-Type: application/json\r\n"
+    //         "Content-Length: " + std::to_string(jsonResponse.size()) + "\r\n"
+    //         "Connection: close\r\n"
+    //         "\r\n" +
+    //         jsonResponse;
+
+
+    //     // std::string response =
+    //     //     "HTTP/1.1 200 OK\r\n"
+    //     //     "Content-Type: application/json\r\n"
+    //     //     "Content-Length: " + std::to_string(11) + "\r\n"
+    //     //     "Connection: close\r\n"
+    //     //     "\r\n" +
+    //     //     "Hello world";
+
+    //     send(client_sock, response.c_str(), response.size(), 0);
+    //     closesocket(client_sock);
+    // }
+
     while (true) {
         SOCKET client_sock = accept(listen_sock, nullptr, nullptr);
         if (client_sock == INVALID_SOCKET) continue;
 
-        char buffer[1024];
+        char buffer[4096];
         int bytes = recv(client_sock, buffer, sizeof(buffer), 0);
         if (bytes <= 0) {
             closesocket(client_sock);
             continue;
         }
 
+        std::string request(buffer, bytes);
+        std::cout << request << std::endl;
 
-        for (auto& t : threads) {
-            for (auto& m : t.messages) {
-                for (char c : m.bodyPlain) {
-                    if ((c & 0x80) != 0) std::cout << "Non-ASCII char found in " << t.threadId << "\n";
-                }
+        // Parse request path
+        std::string path = "/";
+        size_t pos = request.find(" ");
+        if (pos != std::string::npos) {
+            size_t pos2 = request.find(" ", pos + 1);
+            if (pos2 != std::string::npos) {
+                path = request.substr(pos + 1, pos2 - pos - 1);
             }
         }
 
-        
-        std::string jsonResponse = threadsToJson(threads).dump();
+        // Serve API JSON
+        if (path == "/api/threads") {
+            std::string jsonResponse = threadsToJson(threads).dump();
+
+            std::string response =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: " + std::to_string(jsonResponse.size()) + "\r\n"
+                "Connection: close\r\n\r\n" +
+                jsonResponse;
+
+            send(client_sock, response.c_str(), response.size(), 0);
+            closesocket(client_sock);
+            continue;
+        }
+
+        // Map request to file
+        if (path == "/") path = "/index.html";
+        std::string filePath = "public" + path;
+
+        // Load static file
+        FILE* file = fopen(filePath.c_str(), "rb");
+        if (!file) {
+            std::string notFound =
+                "HTTP/1.1 404 Not Found\r\n"
+                "Content-Length: 0\r\n\r\n";
+            send(client_sock, notFound.c_str(), notFound.size(), 0);
+            closesocket(client_sock);
+            continue;
+        }
+
+        fseek(file, 0, SEEK_END);
+        long fileLen = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        std::string fileData(fileLen, '\0');
+        fread(&fileData[0], 1, fileLen, file);
+        fclose(file);
+
+        std::string contentType = "text/plain";
+
+        // c20
+        // if (path.ends_with(".html")) contentType = "text/html";
+        // else if (path.ends_with(".css")) contentType = "text/css";
+        // else if (path.ends_with(".js")) contentType = "application/javascript";
+
+        // c1-14 and later
+        if (path.size() >= 5 && path.rfind(".html") == path.size() - 5) contentType = "text/html";
+        else if (path.size() >= 4 && path.rfind(".css") == path.size() - 4) contentType = "text/css";
+        else if (path.size() >= 3 && path.rfind(".js") == path.size() - 3) contentType = "application/javascript";
+
 
         std::string response =
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: " + std::to_string(jsonResponse.size()) + "\r\n"
-            "Connection: close\r\n"
-            "\r\n" +
-            jsonResponse;
-
-
-        // std::string response =
-        //     "HTTP/1.1 200 OK\r\n"
-        //     "Content-Type: application/json\r\n"
-        //     "Content-Length: " + std::to_string(11) + "\r\n"
-        //     "Connection: close\r\n"
-        //     "\r\n" +
-        //     "Hello world";
+            "Content-Type: " + contentType + "\r\n"
+            "Content-Length: " + std::to_string(fileData.size()) + "\r\n"
+            "Connection: close\r\n\r\n" +
+            fileData;
 
         send(client_sock, response.c_str(), response.size(), 0);
         closesocket(client_sock);
     }
+
 
     closesocket(listen_sock);
     WSACleanup();
