@@ -27,10 +27,11 @@ header {
 
 .thread-header {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column; /* stack children vertically */
     font-weight: bold;
     cursor: pointer;
 }
+
 
 .thread-header:hover {
     background-color: #f0f0f0;

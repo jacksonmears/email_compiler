@@ -12,7 +12,7 @@
 
 using json = nlohmann::json;
 
-
+//////// NEED TO CHANGE TO WEBSOCKET FOR SOOOOO MANY REASONS (current reason is ability to detect when web browser is closed and we can end the exe)
 
 json messageToJson(const MessageInfo& msg) {
     return {
@@ -130,7 +130,8 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
     //     closesocket(client_sock);
     // }
 
-    while (true) {
+    bool running = true;
+    while (running) {
         SOCKET client_sock = accept(listen_sock, nullptr, nullptr);
         if (client_sock == INVALID_SOCKET) continue;
 
@@ -142,7 +143,7 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
         }
 
         std::string request(buffer, bytes);
-        std::cout << request << std::endl;
+        // std::cout << request << std::endl;
 
         // Parse request path
         std::string path = "/";
@@ -170,9 +171,24 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
             continue;
         }
 
+
+        if (path == "/shutdown") {
+            std::string ok =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Length: 0\r\n"
+                "Connection: close\r\n\r\n";
+            send(client_sock, ok.c_str(), ok.size(), 0);
+            running = false;
+            closesocket(client_sock);
+            break;
+        }
+
         // Map request to file
         if (path == "/") path = "/index.html";
         std::string filePath = "public" + path;
+
+
+
 
         // Load static file
         FILE* file = fopen(filePath.c_str(), "rb");
@@ -214,7 +230,6 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
             fileData;
 
         send(client_sock, response.c_str(), response.size(), 0);
-        closesocket(client_sock);
     }
 
 

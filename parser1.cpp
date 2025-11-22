@@ -380,6 +380,30 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
 
 
+void debugPrintThreads(const std::vector<ThreadInfo>& threads) {
+    for (const auto& t : threads) {
+        // std::cout << "Thread ID: " << t.threadId 
+        //           << " | History: " << t.historyId
+        //           << " | Messages: " << t.messages.size() << "\n";
+
+        std::cout << "Thread ID: " << t.threadId << ' ';
+
+        for (const auto& m : t.messages) {
+            // std::cout << "-- Message --\n";
+            if (m.from.size() < 6) std::cerr << "\nFrom: " << m.from;
+            if (m.to.size() < 6) std::cerr << "\nTo: " << m.to;
+            if (m.subject.size() < 6) std::cerr << "\nSubject: " << m.from;
+
+        std::cout << "\n";
+
+            // if (!m.bodyHtml.empty())
+            //     std::cout << "[HTML Body length: " << m.bodyHtml_size << "]\n";
+
+            // if (!m.bodyPlain.empty())
+            //     std::cout << "[Plain Body length: " << m.bodyPlain_size << "]\n";
+        }
+    }
+}
 
 
 
@@ -483,17 +507,22 @@ int main() {
     }
 
 
-    // for (auto t : threadInfo) if (t.messages.size() > 1) {
+    // for (auto t : threadInfo) {
     //     // std::cout << t.messages[0].subject << ": ";
-    //     for (auto m : t.messages) {
-    //         for (auto c : m.bodyHtml) std::cout << c;
-    //         std::cout << std::endl;
-    //     }
+    //     std::cout << t.messages[0].from << std::endl;
     // }
 
 
 
+
+    // debugPrintThreads(threadInfo);
+
+
+
+
     // ShowThreadListGUI(threadInfo);
+
+
     runServer(threadInfo, 8080);
 
 

@@ -1,5 +1,36 @@
+function cleanFromField(from) {
+    // Split multiple senders by newline, take the last sender
+    const parts = from.split(/\r?\n/);
+    let last = parts[parts.length - 1].trim();
+
+    // Remove non-breaking spaces and weird whitespace
+    last = last.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+
+    // Ensure format: Name <email>
+    const match = last.match(/"?([^"]*)"?\s*<([^>]+)>/);
+    if (match) {
+        const name = match[1].trim() || match[2]; // fallback to email
+        const email = match[2].trim();
+        return `${name} <${email}>`;
+    }
+    return last; // fallback if parsing fails
+}
+
+
+
+
+
+document.getElementById("shutdown-btn").addEventListener("click", () => {
+    fetch("/shutdown", { method: "POST" })
+        .then(() => {
+            window.close(); // Will work if triggered by click event
+        });
+});
+
+
+
 // Fetch threads JSON from the server
-fetch('api/threads')
+fetch('api/threads', { method: "GET" })
     .then(res => res.json())
     .then(threads => renderThreads(threads))
     .catch(err => console.error("Error fetching threads:", err));
@@ -12,11 +43,53 @@ function renderThreads(threads) {
         const threadDiv = document.createElement('div');
         threadDiv.classList.add('thread');
 
+
+
+
         // Thread header
+        // const header = document.createElement('div');
+        // header.classList.add('thread-header');
+        // header.textContent = `Thread ID: ${thread.threadId} | History ID: ${thread.historyId}`;
+        // threadDiv.appendChild(header);
+
+        // console.log("Newest Message Debug:");
+        // console.log("FROM: [" + newestMsg.from + "]");
+        // console.log("TO:   [" + newestMsg.to + "]");
+        // console.log("SUBJ: [" + newestMsg.subject + "]");
+
+
+        // Use the newest message in the thread
+        const newestMsg = thread.messages[thread.messages.length - 1];
+
+        // console.log("Newest Message Debug:");
+        // console.log("FROM: [" + newestMsg.from + "]");
+        // console.log("TO:   [" + newestMsg.to + "]");
+        // console.log("SUBJ: [" + newestMsg.subject + "]");
+
         const header = document.createElement('div');
         header.classList.add('thread-header');
-        header.textContent = `Thread ID: ${thread.threadId} | History ID: ${thread.historyId}`;
+
+        // Multi-line display using innerHTML + <br>
+        header.innerHTML = `
+            <p><strong>From:</strong> ${cleanFromField(newestMsg.from)}</p>
+            <p><strong>To:</strong> ${newestMsg.to}</p>
+            <p><strong>Subject:</strong> ${newestMsg.subject}</p>
+        `;
+
+        // header.innerHTML = `
+        //     <strong>From:</strong> ${newestMsg.from}<br>
+        //     <strong>To:</strong> ${newestMsg.to}<br>
+        //     <strong>Subject:</strong> ${newestMsg.subject}
+        // `;
+
+
         threadDiv.appendChild(header);
+
+
+
+
+
+
 
         // Messages container
         const messagesDiv = document.createElement('div');
