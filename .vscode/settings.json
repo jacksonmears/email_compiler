@@ -69,6 +69,12 @@
         "chrono": "cpp",
         "condition_variable": "cpp",
         "mutex": "cpp",
-        "unordered_set": "cpp"
+        "unordered_set": "cpp",
+        "bitset": "cpp",
+        "csignal": "cpp",
+        "list": "cpp",
+        "set": "cpp",
+        "regex": "cpp",
+        "stack": "cpp"
     }
 }

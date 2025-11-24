@@ -1,21 +1,74 @@
+// function cleanFromField(from) {
+//     // Split multiple senders by newline, take the last sender
+//     const parts = from.split(/\r?\n/);
+//     let last = parts[parts.length - 1].trim();
+
+//     // Remove non-breaking spaces and weird whitespace
+//     last = last.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+
+//     // Ensure format: Name <email>
+//     const match = last.match(/"?([^"]*)"?\s*<([^>]+)>/);
+//     if (match) {
+//         const name = match[1].trim() || match[2]; // fallback to email
+//         const email = match[2].trim();
+//         return `${name} <${email}>`;
+//     }
+//     return last; // fallback if parsing fails
+// }
+
+// function cleanFromField(from) {
+//     if (!from) return "";
+
+//     // Trim any whitespace at the beginning or end
+//     let cleaned = from.trim();
+
+//     // Find the last <...> and extract the email
+//     const lastAngle = cleaned.lastIndexOf('<');
+//     if (lastAngle !== -1) {
+//         const name = cleaned.substring(0, lastAngle).trim();
+//         let email = cleaned.substring(lastAngle + 1, cleaned.length).replace('>', '').trim();
+//         console.log(email);
+//         return `${name} &lt;${email}&gt;`; // Name + cleaned email
+//     }
+
+//     // Fallback (should never happen with guaranteed input)
+//     return cleaned;
+// }
+
+
 function cleanFromField(from) {
-    // Split multiple senders by newline, take the last sender
-    const parts = from.split(/\r?\n/);
-    let last = parts[parts.length - 1].trim();
+    if (!from) return "";
 
-    // Remove non-breaking spaces and weird whitespace
-    last = last.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+    // Trim any whitespace at the beginning or end
+    let cleaned = from.trim();
 
-    // Ensure format: Name <email>
-    const match = last.match(/"?([^"]*)"?\s*<([^>]+)>/);
-    if (match) {
-        const name = match[1].trim() || match[2]; // fallback to email
-        const email = match[2].trim();
-        return `${name} <${email}>`;
+    // Find the last <...> and extract the email
+    const lastAngle = cleaned.lastIndexOf('<');
+    if (lastAngle !== -1) {
+        const name = cleaned.substring(0, lastAngle).trim();
+        let email = cleaned.substring(lastAngle + 1, cleaned.length).replace('>', '').trim();
+
+        // Return Name + clickable grey email
+        return `${name} <a style="color: gray; text-decoration: none;"> &lt;${email}&gt;</a>`;
     }
-    return last; // fallback if parsing fails
+
+    // Fallback (should never happen with guaranteed input)
+    return cleaned;
 }
 
+
+
+
+
+function cleanToField(to) {
+    if (!to) return "";
+
+    // Escape HTML to prevent accidental tag parsing
+    return to
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
 
 
 
@@ -72,7 +125,7 @@ function renderThreads(threads) {
         // Multi-line display using innerHTML + <br>
         header.innerHTML = `
             <p><strong>From:</strong> ${cleanFromField(newestMsg.from)}</p>
-            <p><strong>To:</strong> ${newestMsg.to}</p>
+            <p><strong>To:</strong> ${cleanFromField(newestMsg.to)}</p>
             <p><strong>Subject:</strong> ${newestMsg.subject}</p>
         `;
 

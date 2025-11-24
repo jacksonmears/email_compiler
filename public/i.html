@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Clone (Visual)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top App Bar -->
+    <header class="app-bar">
+        <div class="app-left">
+            <button id="menu-btn">&#9776;</button>
+            <div class="logo">Gmail</div>
+        </div>
+        <div class="app-center">
+            <input type="text" placeholder="Search mail">
+        </div>
+        <div class="app-right">
+            <button class="icon-btn">&#128276;</button>
+            <button class="icon-btn">&#9881;</button>
+            <div class="profile-circle">A</div>
+        </div>
+    </header>
+
+    <!-- Main container -->
+    <div class="container">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <button class="compose-btn">Compose</button>
+            <nav class="folders">
+                <ul>
+                    <li class="active">Inbox</li>
+                    <li>Starred</li>
+                    <li>Sent</li>
+                    <li>Drafts</li>
+                    <li>Spam</li>
+                    <li>Trash</li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Email List -->
+        <main class="email-list" id="thread-list">
+            <!-- Add more threads visually -->
+        </main>
+
+        <!-- Right panel (optional, placeholder) -->
+        <aside class="right-panel">
+            <div class="panel-header">Details</div>
+        </aside>
+    </div>
+
+    <script src="a.js"></script>
+</body>
+</html>

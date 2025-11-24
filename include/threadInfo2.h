@@ -2,10 +2,30 @@
 
 #include <string>
 #include <vector>
+#include <set>
+
+
+struct ThreadID {
+    std::string id;
+    long long internalDate;
+};
+
+struct ThreadSortByDateDesc {
+    bool operator()(const ThreadID& a, const ThreadID& b) const { return a.internalDate < b.internalDate; }
+};
+
+struct Inbox {
+    std::set<ThreadID, ThreadSortByDateDesc> Primary;
+    std::set<ThreadID, ThreadSortByDateDesc> Promotions;
+    std::set<ThreadID, ThreadSortByDateDesc> Social;
+    std::set<ThreadID, ThreadSortByDateDesc> Updates;
+    std::set<ThreadID, ThreadSortByDateDesc> Forums;
+};
 
 
 struct MessageInfo {
-    std::string internalDate; 
+    bool read = true;
+    long long internalDate;
     std::string id;
     std::vector<std::string> labelIds;
     std::string from;
@@ -25,4 +45,19 @@ struct ThreadInfo {
     std::vector<MessageInfo> messages;
     int historyId;            
     std::string token;
+};
+
+
+struct Indicies {
+
+    Inbox inbox{};
+    std::set<ThreadID, ThreadSortByDateDesc> Starred;
+    std::set<ThreadID, ThreadSortByDateDesc> Important;
+    std::set<ThreadID, ThreadSortByDateDesc> Spam;
+    std::set<ThreadID, ThreadSortByDateDesc> Sent;
+    std::set<ThreadID, ThreadSortByDateDesc> Draft;
+    std::set<ThreadID, ThreadSortByDateDesc> Chat;
+    std::set<ThreadID, ThreadSortByDateDesc> Snoozed;
+    std::set<ThreadID, ThreadSortByDateDesc> Trash;
+
 };

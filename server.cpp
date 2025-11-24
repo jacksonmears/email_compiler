@@ -16,7 +16,7 @@ using json = nlohmann::json;
 
 json messageToJson(const MessageInfo& msg) {
     return {
-        // {"internalDate", msg.internalDate},
+        {"internalDate", msg.internalDate},
         {"id", msg.id},
         {"labelIds", msg.labelIds},
         {"from", msg.from},
@@ -184,7 +184,8 @@ void runServer(const std::vector<ThreadInfo>& threads, int port = 8080) {
         }
 
         // Map request to file
-        if (path == "/") path = "/index.html";
+        // if (path == "/") path = "/index.html";
+        if (path == "/") path = "/i.html";
         std::string filePath = "public" + path;
 
 

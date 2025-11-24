@@ -7,6 +7,7 @@
 #include "external/json.hpp"  // https://github.com/nlohmann/json
 #include <fstream>
 #include <filesystem>
+#include <unordered_map>
 #include "include/threadInfo2.h"
 
 using json = nlohmann::json;
@@ -17,44 +18,38 @@ constexpr int BUFFER_SIZE = 4096;
 // void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults);
 void runServer(const std::vector<ThreadInfo>& threads, int port = 8080);
 
-// std::vector<unsigned char> base64url_decode_bytes(const std::string& input) {
-//     std::string s = input;
-//     for (char &c : s) {
-//         if (c == '-') c = '+';
-//         else if (c == '_') c = '/';
-//     }
-//     size_t pad = (4 - (s.size() % 4)) % 4;
-//     s.append(pad, '=');
 
-//     static unsigned char dtable[256];
-//     static bool inited = false;
-//     if (!inited) {
-//         std::fill(std::begin(dtable), std::end(dtable), 0x80);
-//         for (unsigned char i = 'A'; i <= 'Z'; ++i) dtable[i] = i - 'A';
-//         for (unsigned char i = 'a'; i <= 'z'; ++i) dtable[i] = i - 'a' + 26;
-//         for (unsigned char i = '0'; i <= '9'; ++i) dtable[i] = i - '0' + 52;
-//         dtable[(unsigned char)'+'] = 62;
-//         dtable[(unsigned char)'/'] = 63;
-//         dtable[(unsigned char)'='] = 0;
-//         inited = true;
-//     }
+void labelParser(std::unordered_map<std::string, ThreadInfo>& threadInfo, Indicies& indicies) {
+    for (auto& [_, t] : threadInfo) {
+        ThreadID tId = {t.threadId, t.messages.back().internalDate};
 
-//     std::vector<unsigned char> out;
-//     out.reserve((s.size() * 3) / 4);
+        for (auto& m : t.messages) {
+            for (std::string& l : m.labelIds) {
+                // std::cout << l << " ";
 
-//     unsigned int val = 0;
-//     int valb = -8;
-//     for (unsigned char c : s) {
-//         if (dtable[c] & 0x80) continue;
-//         val = (val << 6) + dtable[c];
-//         valb += 6;
-//         if (valb >= 0) {
-//             out.push_back((unsigned char)((val >> valb) & 0xFF));
-//             valb -= 8;
-//         }
-//     }
-//     return out;
-// }
+                if (l == "UNREAD") m.read = false;
+
+                else if (l == "IMPORTANT") indicies.Important.insert(tId);
+                else if (l == "STARRED") indicies.Starred.insert(tId);
+                else if (l == "SENT") indicies.Sent.insert(tId);
+                else if (l == "DRAFT") indicies.Draft.insert(tId);
+                else if (l == "SPAM") indicies.Spam.insert(tId);
+                else if (l == "CHAT") indicies.Chat.insert(tId);
+                else if (l == "SNOOZED") indicies.Snoozed.insert(tId);
+                else if (l == "TRASH") indicies.Trash.insert(tId);
+                
+                else if (l == "CATEGORY_PERSONAL") indicies.inbox.Primary.insert(tId);
+                else if (l == "CATEGORY_SOCIAL") indicies.inbox.Social.insert(tId);
+                else if (l == "CATEGORY_PROMOTIONS") indicies.inbox.Promotions.insert(tId);
+                else if (l == "CATEGORY_UPDATES") indicies.inbox.Updates.insert(tId);
+                else if (l == "CATEGORY_FORUMS") indicies.inbox.Forums.insert(tId);
+
+            } 
+            // std::cout << std::endl;
+        }
+    }
+
+}
 
 
 std::string base64url_decode_to_string(const std::string& input) {
@@ -95,30 +90,6 @@ std::string base64url_decode_to_string(const std::string& input) {
     }
     return out;
 }
-
-
-// struct MessageInfo {
-//     std::string internalDate; 
-//     std::string id;
-//     std::vector<std::string> labelIds;
-//     std::string from;
-//     std::string to;
-//     std::string subject;
-//     long long bodyPlain_size;
-//     std::string bodyPlain;
-//     long long bodyHtml_size;
-//     std::string bodyHtml;
-// };
-
-
-// struct ThreadInfo {
-//     std::string threadId;
-//     std::vector<MessageInfo> messages;
-//     int historyId;            
-//     std::string token;
-// };
-
-
 
 
 std::string get_access_token(const std::string& token_file) {
@@ -256,9 +227,30 @@ std::string readHttpResponse(SSL* ssl) {
 
 // ------------------ Gmail Request ------------------
 
-void generateRequest(const std::string& token, SSL* ssl) {
+// void generateRequest(const std::string& token, SSL* ssl) {
+//     std::string req =
+//         "GET /gmail/v1/users/me/messages?maxResults=100 HTTP/1.1\r\n"
+//         "Host: www.googleapis.com\r\n"
+//         "Authorization: Bearer " + token + "\r\n"
+//         "Connection: close\r\n\r\n";
+//     SSL_write(ssl, req.c_str(), req.size());
+// }
+
+
+// YYYY/MM/DD
+// void generateRequest(const std::string& token, SSL* ssl, std::string& nextPageToken) {
+//     std::string req =
+//         "GET /gmail/v1/users/me/messages?q=after:2025/11/01" + (nextPageToken.size() ? ("&pageToken=" + nextPageToken) : "") + "HTTP/1.1\r\n"
+//         "Host: www.googleapis.com\r\n"
+//         "Authorization: Bearer " + token + "\r\n"
+//         "Connection: close\r\n\r\n";
+//     SSL_write(ssl, req.c_str(), req.size());
+// }
+
+
+void generateRequest(const std::string& token, SSL* ssl, std::string& nextPageToken) {
     std::string req =
-        "GET /gmail/v1/users/me/messages?maxResults=20 HTTP/1.1\r\n"
+        "GET /gmail/v1/users/me/messages?q=after:2025/11/15&pageToken=" + nextPageToken + " HTTP/1.1\r\n"
         "Host: www.googleapis.com\r\n"
         "Authorization: Bearer " + token + "\r\n"
         "Connection: close\r\n\r\n";
@@ -278,7 +270,7 @@ void generateThreadRequest(const std::string& token, const std::string& thread_i
 
 // ------------------ Thread Parsing ------------------
 
-void getThreadIDs(const std::string& body, std::vector<ThreadInfo>& threadInfo, std::string& token) {
+std::string getThreadIDs(const std::string& body, std::unordered_map<std::string, ThreadInfo>& threadInfo, std::string& token) {
     try {
         std::string jsonBody = body;
         size_t start = jsonBody.find_first_not_of(" \n\r\t");
@@ -286,23 +278,25 @@ void getThreadIDs(const std::string& body, std::vector<ThreadInfo>& threadInfo, 
 
         json j = json::parse(jsonBody);
 
-        if (!j.contains("messages") || !j["messages"].is_array()) return;
-
+        if (!j.contains("messages") || !j["messages"].is_array()) return "";
 
         for (const auto& msg : j["messages"]) {
             if (!msg.contains("threadId")) continue;
 
-            if (threadInfo.empty() || msg["threadId"].get<std::string>() != threadInfo[threadInfo.size()-1].threadId) {
+            std::string threadId = msg["threadId"].get<std::string>();
+            if (threadInfo.empty() || !threadInfo.count(threadId)) {
                 ThreadInfo t{};
-                t.threadId = msg["threadId"].get<std::string>();
                 t.token = token;
-                threadInfo.push_back(t);
+                t.threadId = threadId;
+                threadInfo[t.threadId] = t;
             }
         }
 
+        return (j.contains("nextPageToken") ? j["nextPageToken"] : "");
 
     } catch (const std::exception& e) {
         std::cerr << "[DEBUG] Failed to parse thread list JSON: " << e.what() << "\n";
+        return "";
     }
 }
 
@@ -324,7 +318,7 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
             if (m.contains("id")) msg.id = m["id"].get<std::string>();
             if (m.contains("internalDate")) {
-                msg.internalDate = m["internalDate"].get<std::string>();
+                msg.internalDate = stoll(m["internalDate"].get<std::string>());
             }
             if (m.contains("labelIds")) {
                 for (auto& lbl : m["labelIds"])
@@ -459,33 +453,47 @@ int main() {
 
 
     // std::vector<std::vector<std::string>> threadIds(token_files.size());
-    std::vector<ThreadInfo> threadInfo{};
-    for (std::string token_file : token_files) {
+    std::unordered_map<std::string, ThreadInfo> threadInfo;
 
-        SOCKET sock;
-        SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock, ctx);
-        if (!ssl) {
-            std::cerr << "[DEBUG] Failed to create SSL connection\n";
-            return 1;
+
+
+    for (std::string token_file : token_files) {
+        std::cout << token_file << std::endl;
+
+        bool morePages = true;
+        std::string nextPageToken = "";
+
+        while (morePages) {
+
+            SOCKET sock;
+            SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock, ctx);
+            if (!ssl) {
+                std::cerr << "[DEBUG] Failed to create SSL connection\n";
+                return 1;
+            }
+
+            std::string token = get_access_token(token_file);
+            // std::cout << token << std::endl;
+
+            generateRequest(token, ssl, nextPageToken);
+
+            std::string response = readHttpResponse(ssl);
+            // std::cout << response << std::endl;
+
+            nextPageToken = getThreadIDs(response, threadInfo, token);
+            // std::cout << nextPageToken.size() << " " << nextPageToken << std::endl;
+            if (!nextPageToken.size()) morePages = false;
+
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+            closesocket(sock);
         }
 
-        std::string token = get_access_token(token_file);
-        // std::cout << token << std::endl;
-
-        generateRequest(token, ssl);
-
-        std::string response = readHttpResponse(ssl);
-        // std::cout << response << std::endl;
-
-        getThreadIDs(response, threadInfo, token);
-
-        SSL_shutdown(ssl);
-        SSL_free(ssl);
-        closesocket(sock);
     }
 
 
-    for (auto& t : threadInfo) {
+    std::cout << threadInfo.size() << std::endl;
+    for (auto& [_, t] : threadInfo) {
 
         SOCKET sock;
         SSL* ssl = createSSLConnection("www.googleapis.com", 443, sock, ctx);
@@ -493,6 +501,7 @@ int main() {
             std::cerr << "[DEBUG] Failed to create SSL connection\n";
             return 1;
         }
+
 
         generateThreadRequest(t.token, t.threadId, ssl);
 
@@ -500,6 +509,7 @@ int main() {
         // std::cout << response << std::endl;
 
         populateThreadInfo(response, t);
+
 
         SSL_shutdown(ssl);
         SSL_free(ssl);
@@ -513,22 +523,56 @@ int main() {
     // }
 
 
+    Indicies indicies{};
+    labelParser(threadInfo, indicies);
 
+
+    std::cout << indicies.inbox.Primary.size() << "\n";
+    std::cout << indicies.inbox.Promotions.size() << "\n";
+    std::cout << indicies.inbox.Social.size() << "\n";
+    std::cout << indicies.inbox.Updates.size() << "\n";
+    std::cout << indicies.inbox.Forums.size() << "\n";
+
+    std::cout << indicies.Starred.size() << "\n";
+    std::cout << indicies.Important.size() << "\n";
+    std::cout << indicies.Spam.size() << "\n";
+    std::cout << indicies.Sent.size() << "\n";
+    std::cout << indicies.Draft.size() << "\n";
+    std::cout << indicies.Snoozed.size() << "\n";
+    std::cout << indicies.Trash.size() << "\n";
+
+
+
+    // for (auto& i : indicies.inbox.Primary) {
+    //     std::cout << i.id << std::endl;
+    // }
+
+
+
+    // for (auto& t : indicies.Important) {
+    //     std::cout << t.internalDate << std::endl;
+    // }
+
+    // for (auto [key, value] : threadInfo) {
+    //     for (auto m : value.messages) {
+    //         std::cout << m.read << " ";
+    //     } std::cout << std::endl;
+    // }
 
     // debugPrintThreads(threadInfo);
 
-    sort(threadInfo.begin(), threadInfo.end(), 
-        [](const ThreadInfo&a, const ThreadInfo&b) {
-            return a.messages[a.messages.size()-1].internalDate > b.messages[b.messages.size()-1].internalDate;
-        }
-    );
+    // sort(threadInfo.begin(), threadInfo.end(), 
+    //     [](const ThreadInfo&a, const ThreadInfo&b) {
+    //         return a.messages[a.messages.size()-1].internalDate > b.messages[b.messages.size()-1].internalDate;
+    //     }
+    // );
 
 
 
-    for (auto t : threadInfo) {
-        for (auto l : t.messages[0].labelIds) std::cout << l << " ";
-        std::cout << std::endl;
-    }
+    // for (auto t : threadInfo) {
+    //     for (auto l : t.messages[0].labelIds) std::cout << l << " ";
+    //     std::cout << std::endl;
+    // }
 
 
     // ShowThreadListGUI(threadInfo);

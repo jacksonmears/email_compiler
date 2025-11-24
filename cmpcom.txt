@@ -5,3 +5,12 @@ g++ parser1.cpp -o parser1.exe -lws2_32 -lssl -lcrypto; ./parser1
 
 
 g++ parser1.cpp parserV1.cpp -o parser1.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./parser1
+
+
+
+
+g++ parser1.cpp server.cpp -o testing.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./testing
+
+
+
+g++ parserV2.cpp -o z.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./z.exe
