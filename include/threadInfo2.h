@@ -7,11 +7,11 @@
 
 struct ThreadID {
     std::string id;
-    long long internalDate;
+    long long threadDate;
 };
 
 struct ThreadSortByDateDesc {
-    bool operator()(const ThreadID& a, const ThreadID& b) const { return a.internalDate > b.internalDate; }
+    bool operator()(const ThreadID& a, const ThreadID& b) const { return a.threadDate > b.threadDate; }
 };
 
 struct Inbox {

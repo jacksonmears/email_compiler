@@ -14,13 +14,17 @@ using json = nlohmann::json;
 
 //////// NEED TO CHANGE TO WEBSOCKET FOR SOOOOO MANY REASONS (current reason is ability to detect when web browser is closed and we can end the exe)
 
-json threadIdSetToJson(const std::set<ThreadID, ThreadSortByDateDesc> s) {
+json threadIdSetToJson(const std::set<ThreadID, ThreadSortByDateDesc>& s) {
     json arr = json::array();
     for (const auto& t : s) {
-        arr.push_back({t.id, t.internalDate});
+        arr.push_back({
+            {"id", t.id},
+            {"threadDate", t.threadDate}   
+        });
     }
     return arr;
 }
+
 
 json messageToJson(const MessageInfo msg) {
     return {

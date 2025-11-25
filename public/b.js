@@ -1,89 +1,163 @@
-
-// var RBTree = require('bintrees').RBTree;
- 
-// const tree = new RBTree((a, b) => b.date - a.date);
-
- 
-// tree.insert(2);
-// tree.insert(-3);
+import { RBTree } from "https://cdn.skypack.dev/bintrees";
 
 
+class MessageInfo {
+    constructor(msg) {
+        this.read = msg.read ?? true;
+        this.internalDate = msg.internalDate ?? 0;
+        this.id = msg.id ?? "";
+        this.labelIds = msg.labelIds ?? [];
+        this.from = msg.from ?? "";
+        this.to = msg.to ?? "";
+        this.subject = msg.subject ?? "";
+        this.bodyPlain = msg.bodyPlain ?? "";
+        this.bodyHtml = msg.bodyHtml ?? "";
+    }
+}
 
-
-// ---------- Fetch Threads from Local API ----------
-fetch('api/threads')
-  .then(res => res.json())
-  .then(data => {
-    const threadList = document.getElementById('thread-list');
-    if (!threadList) return;
-
-    const pre = document.createElement('pre');
-    pre.textContent = JSON.stringify(data, null, 2); // pretty JSON
-    pre.style.whiteSpace = "pre-wrap"; // wrap long lines
-    threadList.appendChild(pre);
-  })
-  .catch(err => console.error(err));
-
-
+class ThreadInfo {
+    constructor(thread) {
+        this.threadId = thread.threadId ?? "";
+        this.threadDate = thread.threadDate ?? 0;
+        this.token = thread.token ?? "";
+        this.messages = (thread.messages ?? []).map(msg => new MessageInfo(msg));
+    }
+}
 
 
 
 
-// fetch('api/threads', { method: "GET" })
+/**
+ * Create a new RBTree with descending threadDate order
+ */
+function createThreadTree() {
+    return new RBTree((a, b) => b.threadDate - a.threadDate);
+}
+
+/**
+ * Fill a tree from an array of threads
+ * @param {RBTree} tree
+ * @param {Array} threads
+ */
+function fillTree(tree, threads) {
+    threads.forEach(thread => {
+        tree.insert({
+            id: thread.id,
+            threadDate: thread.threadDate
+        });
+    });
+}
+
+/**
+ * Initialize all inbox and label trees from fetched JSON
+ * @param {Object} data - fetched JSON
+ */
+function buildTrees(data) {
+    const inboxBuckets = data.buckets.inbox;
+    const labelBuckets = data.buckets.labels;
+
+    // --- Inbox trees ---
+    const inboxTrees = {
+        Primary: createThreadTree(),
+        Promotions: createThreadTree(),
+        Social: createThreadTree(),
+        Forums: createThreadTree()
+    };
+
+    Object.entries(inboxBuckets).forEach(([bucketName, threads]) => {
+        if (inboxTrees[bucketName]) {
+            fillTree(inboxTrees[bucketName], threads);
+        }
+    });
+
+    // --- Label trees ---
+    const labelTrees = {
+        Starred: createThreadTree(),
+        Important: createThreadTree(),
+        Spam: createThreadTree(),
+        Sent: createThreadTree(),
+        Draft: createThreadTree(),
+        Chat: createThreadTree(),
+        Snoozed: createThreadTree(),
+        Trash: createThreadTree()
+    };
+
+    Object.entries(labelBuckets).forEach(([labelName, threads]) => {
+        if (labelTrees[labelName]) {
+            fillTree(labelTrees[labelName], threads);
+        }
+    });
+
+    return { inboxTrees, labelTrees };
+}
+
+
+
+function fetchThreadsMap(data) {
+    const threadMap = new Map();
+
+    Object.values(data.threads).forEach(threadJson => {
+        const thread = new ThreadInfo(threadJson);
+        threadMap.set(thread.threadId, thread);
+    });
+
+    return threadMap; // Map<string, ThreadInfo>
+}
+
+
+
+
+// fetch('api/threads')
 //     .then(res => res.json())
 //     .then(data => {
-//         // Separate out the buckets
-//         const inboxBuckets = data.buckets.inbox;
-//         const labelBuckets = data.buckets.labels;
+//         const { inboxTrees, labelTrees } = buildTrees(data);
 
-//         // For easier access, we can create a map from bucket name to array of thread IDs
-//         const inbox = {
-//             Primary: new Set(inboxBuckets.Primary || []),
-//             Promotions: new Set(inboxBuckets.Promotions || []),
-//             Social: new Set(inboxBuckets.Social || []),
-//             Forums: new Set(inboxBuckets.Forums || [])
-//         };
+//         // Example: print all Primary inbox threads (descending order)
+//         console.log("Primary Inbox Threads:");
+//         inboxTrees.Primary.each(thread => {
+//             console.log(thread.id, thread.threadDate);
+//         });
 
-//         const labels = {
-//             Important: new Set(labelBuckets.Important || []),
-//             Starred: new Set(labelBuckets.Starred || []),
-//             Sent: new Set(labelBuckets.Sent || []),
-//             Draft: new Set(labelBuckets.Draft || []),
-//             Spam: new Set(labelBuckets.Spam || []),
-//             Chat: new Set(labelBuckets.Chat || []),
-//             Snoozed: new Set(labelBuckets.Snoozed || []),
-//             Trash: new Set(labelBuckets.Trash || [])
-//         };
-
-
-//         // Store all threads details
-//         const threads = data.threads;
-
-//         // Example: render Primary inbox threads
-//         const threadList = document.getElementById('thread-list');
-//         if (threadList) {
-//             threadList.innerHTML = ''; // clear first
-
-//             inbox.Primary.forEach(threadId => {
-//                 const thread = threads[threadId];
-//                 if (!thread) return;
-
-//                 thread.messages.forEach(msg => {
-//                     const div = document.createElement('div');
-//                     div.className = 'thread-item';
-//                     div.innerHTML = `
-//                         <strong>From:</strong> ${msg.from} <br>
-//                         <strong>To:</strong> ${msg.to} <br>
-//                         <strong>Subject:</strong> ${msg.subject} <br>
-//                         <strong>Labels:</strong> ${msg.labelIds.join(', ')} <br>
-//                         <hr>
-//                     `;
-//                     threadList.appendChild(div);
-//                 });
-//             });
-//         }
-
-//         // You can repeat for other inbox / label buckets
-//         console.log({ inbox, labels, threads });
+//         // Example: print Starred label threads
+//         console.log("Starred Threads:");
+//         labelTrees.Starred.each(thread => console.log(thread.id, thread.threadDate));
 //     })
 //     .catch(err => console.error(err));
+
+
+
+fetch('api/threads')
+    .then(res => res.json())
+    .then(data => {
+        const threadList = document.getElementById('thread-list');
+        if (!threadList) return;
+
+        const { inboxTrees } = buildTrees(data);
+        const threadsMap = fetchThreadsMap(data);
+
+        threadList.innerHTML = ""; // clear any existing content
+
+        // Render all Primary inbox threads
+        inboxTrees.Primary.each(threadSummary => {
+            // Lookup full thread info
+            const thread = threadsMap.get(threadSummary.id);
+            if (!thread || thread.messages.length === 0) return;
+
+            // Get most recent message (last in array)
+            const lastMsg = thread.messages[thread.messages.length - 1];
+
+            const div = document.createElement('div');
+            div.className = "email-thread";
+            div.innerHTML = `
+                <span class="from">${lastMsg.from}</span>
+                <span class="to">${lastMsg.to}</span>
+                <span class="subject">${lastMsg.subject}</span>
+                <span class="date">${new Date(lastMsg.internalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            `;
+            threadList.appendChild(div);
+
+            threadList.appendChild(div);
+        });
+    })
+    .catch(err => console.error(err));
+
