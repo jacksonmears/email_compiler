@@ -29,7 +29,6 @@ struct MessageInfo {
     std::vector<std::string> labelIds;
     std::string from;
     std::string to;
-    std::string subject;
     long long bodyPlain_size;
     // std::vector<unsigned char> bodyPlain;
     std::string bodyPlain;
@@ -42,8 +41,9 @@ struct MessageInfo {
 struct ThreadInfo {
     std::string threadId;
     std::vector<MessageInfo> messages;
-    long long threadDate;            
+    long long threadDate {0};            
     std::string token;
+    std::string subject;
 };
 
 

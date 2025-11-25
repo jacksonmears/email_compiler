@@ -8,15 +8,36 @@
 #include <fstream>
 #include <filesystem>
 #include <unordered_map>
+#include <chrono>
 #include "include/threadInfo2.h"
 
 using json = nlohmann::json;
+using TimePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
+
 
 constexpr int BUFFER_SIZE = 4096;
 
 // forward declaration
 // void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults);
-void runServer(const Indicies indicies, std::unordered_map<std::string, ThreadInfo> threadInfo, int port = 8080);
+void runServer(const Indicies indicies, std::unordered_map<std::string, ThreadInfo> threadInfo, TimePoint start, int port = 8080);
+
+
+
+std::string cleanToField(const std::string& value) {
+    std::string ans;
+    
+    int i = 0;
+    while (i < value.size() && value[i] != '@') ++i;
+
+    if (i == value.size()) return ans;
+
+    while (i > 0 && value[i-1] != ' ' && value[i-1] != '<' && value[i-1] != '\"') --i;
+
+    while (i < value.size() && value[i] != ' ' && value[i] != '>' && value[i] != '\"') ans += value[i++];
+
+    return ans;
+}
+
 
 
 void labelParser(std::unordered_map<std::string, ThreadInfo>& threadInfo,
@@ -272,7 +293,7 @@ std::string readHttpResponse(SSL* ssl) {
 void generateRequest(const std::string& token, SSL* ssl, std::string& nextPageToken) {
     std::string req = 
         "GET /gmail/v1/users/me/messages?"
-        "q=after:2025/11/23"
+        "q=after:2025/11/20"
         "&maxResults=500" +
         (nextPageToken.empty() ? "" : "&pageToken=" + nextPageToken) +
         " HTTP/1.1\r\n"
@@ -345,6 +366,7 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
             if (m.contains("id")) msg.id = m["id"].get<std::string>();
             if (m.contains("internalDate")) {
                 msg.internalDate = stoll(m["internalDate"].get<std::string>());
+                t.threadDate = std::max(t.threadDate, msg.internalDate);
             }
             if (m.contains("labelIds")) {
                 for (auto& lbl : m["labelIds"])
@@ -361,33 +383,81 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
                         if (name == "From") {
                             msg.from = value;
                         } else if (name == "To") {
-                            msg.to = value;
-                        } else if (name == "Subject") {
-                            msg.subject = value;
+                            msg.to = cleanToField(value);
+                        } else if (name == "Subject" && msg.internalDate == t.threadDate) {
+                            t.subject = value;
                         } 
 
                     }
                 }
 
+
+
+
+
+
+                // if (m["payload"].contains("parts")) {
+                //     for (const auto& part : m["payload"]["parts"]) {
+                //         if (part.contains("body")) {
+                //             std::string check = part["mimeType"].get<std::string>();
+                //             // std::cout << check << std::endl;
+
+                //             if (check == "text/plain") {
+                //                 msg.bodyPlain_size = part["body"]["size"].get<long long>();
+                //                 // msg.bodyPlain = base64url_decode_bytes(part["body"]["data"].get<std::string>());
+                //                 msg.bodyPlain = part["body"]["data"].get<std::string>();
+                //             } 
+                //             else if (check == "text/html") {
+                //                 msg.bodyHtml_size = part["body"]["size"].get<long long>();
+                //                 // msg.bodyHtml = base64url_decode_bytes(part["body"]["data"].get<std::string>());
+                //                 msg.bodyHtml = part["body"]["data"].get<std::string>();
+                //             }
+                //         }
+                //     }
+                // }
+
+
+
+                // Check top-level payload body
+                if (m["payload"].contains("body")) {
+                    auto& bodyObj = m["payload"]["body"];
+                    std::string mimeType = m["payload"]["mimeType"].get<std::string>();
+
+                    if (mimeType == "text/plain") {
+                        msg.bodyPlain_size = bodyObj["size"].get<long long>();
+                        msg.bodyPlain = bodyObj["data"].get<std::string>();
+                    } 
+                    else if (mimeType == "text/html") {
+                        msg.bodyHtml_size = bodyObj["size"].get<long long>();
+                        msg.bodyHtml = bodyObj["data"].get<std::string>();
+                    }
+                }
+
+                // Then process parts if they exist
                 if (m["payload"].contains("parts")) {
                     for (const auto& part : m["payload"]["parts"]) {
-                        if (part.contains("body")) {
-                            std::string check = part["mimeType"].get<std::string>();
-                            // std::cout << check << std::endl;
+                        if (!part.contains("body")) continue;
 
-                            if (check == "text/plain") {
-                                msg.bodyPlain_size = part["body"]["size"].get<long long>();
-                                // msg.bodyPlain = base64url_decode_bytes(part["body"]["data"].get<std::string>());
-                                msg.bodyPlain = part["body"]["data"].get<std::string>();
-                            } 
-                            else if (check == "text/html") {
-                                msg.bodyHtml_size = part["body"]["size"].get<long long>();
-                                // msg.bodyHtml = base64url_decode_bytes(part["body"]["data"].get<std::string>());
-                                msg.bodyHtml = part["body"]["data"].get<std::string>();
-                            }
+                        std::string mimeType = part["mimeType"].get<std::string>();
+                        if (mimeType == "text/plain") {
+                            msg.bodyPlain_size = part["body"]["size"].get<long long>();
+                            msg.bodyPlain = part["body"]["data"].get<std::string>();
+                        }
+                        else if (mimeType == "text/html") {
+                            msg.bodyHtml_size = part["body"]["size"].get<long long>();
+                            msg.bodyHtml = part["body"]["data"].get<std::string>();
                         }
                     }
                 }
+
+
+
+
+
+
+
+
+
             }
 
             t.messages.push_back(msg);
@@ -412,7 +482,7 @@ void debugPrintThreads(const std::vector<ThreadInfo>& threads) {
             // std::cout << "-- Message --\n";
             if (m.from.size() < 6) std::cerr << "\nFrom: " << m.from;
             if (m.to.size() < 6) std::cerr << "\nTo: " << m.to;
-            if (m.subject.size() < 6) std::cerr << "\nSubject: " << m.from;
+            if (t.subject.size() < 6) std::cerr << "\nSubject: " << m.from;
 
         std::cout << "\n";
 
@@ -431,6 +501,8 @@ void debugPrintThreads(const std::vector<ThreadInfo>& threads) {
 // ------------------ Main ------------------
 
 int main() {
+
+    TimePoint start = std::chrono::high_resolution_clock::now();
 
     if (system("python auth.py")) {
         std::cerr << "User authentication failed\n";
@@ -546,8 +618,30 @@ int main() {
     Indicies indicies{};
     labelParser(threadInfo, indicies);
 
+    // for (auto& i : indicies.inbox.Primary) {
+    //     if (i.id == "19abbf07c63ee515") {
+    //         std::cout << threadInfo[i.id].messages.back().from << "\n";
+    //         std::cout << threadInfo[i.id].messages.back().bodyHtml << std::endl;
+    //     }
+    // }
 
-    runServer(indicies, threadInfo, 8080);
+    // auto& it = threadInfo["19a3b3703b3be043"];
+
+    // for (auto& i : it.messages) {
+    //     std::cout << i.id << " " << i.bodyPlain << std::endl; 
+    // }
+
+
+    // for (auto& [_, v] : threadInfo) {
+    //     if (v.messages.size() > 1) {
+    //         for (auto& m : v.messages) {
+    //             std::cout << base64url_decode_to_string(m.bodyHtml) << "\n\n";
+    //         }
+    //     }
+    // }
+
+
+    runServer(indicies, threadInfo, start, 8080);
 
 
     SSL_CTX_free(ctx);

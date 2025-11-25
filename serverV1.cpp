@@ -11,6 +11,8 @@
 
 
 using json = nlohmann::json;
+using TimePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
+
 
 //////// NEED TO CHANGE TO WEBSOCKET FOR SOOOOO MANY REASONS (current reason is ability to detect when web browser is closed and we can end the exe)
 
@@ -33,7 +35,6 @@ json messageToJson(const MessageInfo msg) {
         {"labelIds", msg.labelIds},
         {"from", msg.from},
         {"to", msg.to},
-        {"subject", msg.subject},
         {"bodyPlain", msg.bodyPlain}, // keep as-is, Base64URL
         {"bodyHtml", msg.bodyHtml}    // keep as-is, Base64URL
     };
@@ -46,7 +47,8 @@ json threadToJson(const ThreadInfo thread) {
 
     return {
         {"threadId", thread.threadId},
-        {"historyId", thread.threadDate},
+        {"threadDate", thread.threadDate},
+        {"threadSubject", thread.subject},
         {"messages", j_messages}
     };
 }
@@ -95,7 +97,7 @@ json exportMailboxJson(
 
 
 
-void runServer(const Indicies indicies, const std::unordered_map<std::string, ThreadInfo> threadInfo, int port = 8080) {
+void runServer(const Indicies indicies, const std::unordered_map<std::string, ThreadInfo> threadInfo, TimePoint start, int port = 8080) {
 
     
     WSADATA wsaData;
@@ -175,6 +177,14 @@ void runServer(const Indicies indicies, const std::unordered_map<std::string, Th
 
             send(client_sock, response.c_str(), response.size(), 0);
             closesocket(client_sock);
+            running = false;
+
+            TimePoint end = std::chrono::high_resolution_clock::now();
+
+            std::chrono::duration<double> diff = end - start;
+
+            std::cout << "Elapsed time: " << diff.count() << " seconds\n";
+
             continue;
         }
 
