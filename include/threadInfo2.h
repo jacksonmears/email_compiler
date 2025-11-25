@@ -11,14 +11,13 @@ struct ThreadID {
 };
 
 struct ThreadSortByDateDesc {
-    bool operator()(const ThreadID& a, const ThreadID& b) const { return a.internalDate < b.internalDate; }
+    bool operator()(const ThreadID& a, const ThreadID& b) const { return a.internalDate > b.internalDate; }
 };
 
 struct Inbox {
     std::set<ThreadID, ThreadSortByDateDesc> Primary;
     std::set<ThreadID, ThreadSortByDateDesc> Promotions;
     std::set<ThreadID, ThreadSortByDateDesc> Social;
-    std::set<ThreadID, ThreadSortByDateDesc> Updates;
     std::set<ThreadID, ThreadSortByDateDesc> Forums;
 };
 
@@ -43,7 +42,7 @@ struct MessageInfo {
 struct ThreadInfo {
     std::string threadId;
     std::vector<MessageInfo> messages;
-    int historyId;            
+    long long threadDate;            
     std::string token;
 };
 
@@ -59,5 +58,6 @@ struct Indicies {
     std::set<ThreadID, ThreadSortByDateDesc> Chat;
     std::set<ThreadID, ThreadSortByDateDesc> Snoozed;
     std::set<ThreadID, ThreadSortByDateDesc> Trash;
+    std::set<ThreadID, ThreadSortByDateDesc> everything;
 
 };

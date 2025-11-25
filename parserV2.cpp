@@ -16,40 +16,61 @@ constexpr int BUFFER_SIZE = 4096;
 
 // forward declaration
 // void ShowThreadListGUI(std::vector<ThreadInfo>& threadResults);
-void runServer(const std::vector<ThreadInfo>& threads, int port = 8080);
+void runServer(const Indicies indicies, std::unordered_map<std::string, ThreadInfo> threadInfo, int port = 8080);
 
 
-void labelParser(std::unordered_map<std::string, ThreadInfo>& threadInfo, Indicies& indicies) {
+void labelParser(std::unordered_map<std::string, ThreadInfo>& threadInfo,
+                 Indicies& indicies) 
+{
     for (auto& [_, t] : threadInfo) {
+
         ThreadID tId = {t.threadId, t.messages.back().internalDate};
+
+        // bool isInbox = false;
+        bool hasCategory = false;
+        bool isUnread = false;
 
         for (auto& m : t.messages) {
             for (std::string& l : m.labelIds) {
-                // std::cout << l << " ";
+                indicies.everything.insert(tId);
 
                 if (l == "UNREAD") m.read = false;
 
-                else if (l == "IMPORTANT") indicies.Important.insert(tId);
-                else if (l == "STARRED") indicies.Starred.insert(tId);
-                else if (l == "SENT") indicies.Sent.insert(tId);
-                else if (l == "DRAFT") indicies.Draft.insert(tId);
-                else if (l == "SPAM") indicies.Spam.insert(tId);
-                else if (l == "CHAT") indicies.Chat.insert(tId);
-                else if (l == "SNOOZED") indicies.Snoozed.insert(tId);
-                else if (l == "TRASH") indicies.Trash.insert(tId);
-                
-                else if (l == "CATEGORY_PERSONAL") indicies.inbox.Primary.insert(tId);
-                else if (l == "CATEGORY_SOCIAL") indicies.inbox.Social.insert(tId);
-                else if (l == "CATEGORY_PROMOTIONS") indicies.inbox.Promotions.insert(tId);
-                else if (l == "CATEGORY_UPDATES") indicies.inbox.Updates.insert(tId);
-                else if (l == "CATEGORY_FORUMS") indicies.inbox.Forums.insert(tId);
+                // else if (l == "INBOX") isInbox = true;
 
-            } 
-            // std::cout << std::endl;
+                else if (l == "IMPORTANT")   indicies.Important.insert(tId);
+                else if (l == "STARRED")     indicies.Starred.insert(tId);
+                else if (l == "SENT")        indicies.Sent.insert(tId);
+                else if (l == "DRAFT")       indicies.Draft.insert(tId);
+                else if (l == "SPAM")        indicies.Spam.insert(tId);
+                else if (l == "CHAT")        indicies.Chat.insert(tId);
+                else if (l == "SNOOZED")     indicies.Snoozed.insert(tId);
+                else if (l == "TRASH")       indicies.Trash.insert(tId);
+
+                // Category labels:
+                else if (l == "CATEGORY_SOCIAL") {
+                    indicies.inbox.Social.insert(tId);
+                    hasCategory = true;
+                }
+                else if (l == "CATEGORY_PROMOTIONS") {
+                    indicies.inbox.Promotions.insert(tId);
+                    hasCategory = true;
+                }
+                else if (l == "CATEGORY_FORUMS") {
+                    indicies.inbox.Forums.insert(tId);
+                    hasCategory = true;
+                }
+            }
         }
-    }
 
+        // ⭐ PRIMARY LOGIC FIX ⭐
+        // If msg is in INBOX but has no category, put it into PRIMARY
+        if (!hasCategory)
+            indicies.inbox.Primary.insert(tId);
+
+    }
 }
+
 
 
 std::string base64url_decode_to_string(const std::string& input) {
@@ -249,11 +270,16 @@ std::string readHttpResponse(SSL* ssl) {
 
 
 void generateRequest(const std::string& token, SSL* ssl, std::string& nextPageToken) {
-    std::string req =
-        "GET /gmail/v1/users/me/messages?q=after:2025/11/15&pageToken=" + nextPageToken + " HTTP/1.1\r\n"
+    std::string req = 
+        "GET /gmail/v1/users/me/messages?"
+        "q=after:2025/11/23"
+        "&maxResults=500" +
+        (nextPageToken.empty() ? "" : "&pageToken=" + nextPageToken) +
+        " HTTP/1.1\r\n"
         "Host: www.googleapis.com\r\n"
         "Authorization: Bearer " + token + "\r\n"
         "Connection: close\r\n\r\n";
+
     SSL_write(ssl, req.c_str(), req.size());
 }
 
@@ -311,7 +337,7 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
 
         if (!j.contains("messages") || !j["messages"].is_array()) return;
 
-        if (j.contains("historyId")) t.historyId = std::stoi(j["historyId"].get<std::string>());
+        if (j.contains("historyId")) t.threadDate = std::stoll(j["historyId"].get<std::string>());
 
         for (const auto& m : j["messages"]) {
             MessageInfo msg;
@@ -517,68 +543,11 @@ int main() {
     }
 
 
-    // for (auto t : threadInfo) {
-    //     // std::cout << t.messages[0].subject << ": ";
-    //     std::cout << t.messages[0].from << std::endl;
-    // }
-
-
     Indicies indicies{};
     labelParser(threadInfo, indicies);
 
 
-    std::cout << indicies.inbox.Primary.size() << "\n";
-    std::cout << indicies.inbox.Promotions.size() << "\n";
-    std::cout << indicies.inbox.Social.size() << "\n";
-    std::cout << indicies.inbox.Updates.size() << "\n";
-    std::cout << indicies.inbox.Forums.size() << "\n";
-
-    std::cout << indicies.Starred.size() << "\n";
-    std::cout << indicies.Important.size() << "\n";
-    std::cout << indicies.Spam.size() << "\n";
-    std::cout << indicies.Sent.size() << "\n";
-    std::cout << indicies.Draft.size() << "\n";
-    std::cout << indicies.Snoozed.size() << "\n";
-    std::cout << indicies.Trash.size() << "\n";
-
-
-
-    // for (auto& i : indicies.inbox.Primary) {
-    //     std::cout << i.id << std::endl;
-    // }
-
-
-
-    // for (auto& t : indicies.Important) {
-    //     std::cout << t.internalDate << std::endl;
-    // }
-
-    // for (auto [key, value] : threadInfo) {
-    //     for (auto m : value.messages) {
-    //         std::cout << m.read << " ";
-    //     } std::cout << std::endl;
-    // }
-
-    // debugPrintThreads(threadInfo);
-
-    // sort(threadInfo.begin(), threadInfo.end(), 
-    //     [](const ThreadInfo&a, const ThreadInfo&b) {
-    //         return a.messages[a.messages.size()-1].internalDate > b.messages[b.messages.size()-1].internalDate;
-    //     }
-    // );
-
-
-
-    // for (auto t : threadInfo) {
-    //     for (auto l : t.messages[0].labelIds) std::cout << l << " ";
-    //     std::cout << std::endl;
-    // }
-
-
-    // ShowThreadListGUI(threadInfo);
-
-
-    // runServer(threadInfo, 8080);
+    runServer(indicies, threadInfo, 8080);
 
 
     SSL_CTX_free(ctx);

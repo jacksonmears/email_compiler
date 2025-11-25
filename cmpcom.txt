@@ -9,7 +9,7 @@ g++ parser1.cpp parserV1.cpp -o parser1.exe -lws2_32 -lssl -lcrypto -luser32 -lg
 
 
 
-g++ parser1.cpp server.cpp -o testing.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./testing
+g++ parserV2.cpp serverV1.cpp -o zzz.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./zzz
 
 
 
