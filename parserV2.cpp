@@ -55,7 +55,9 @@ void labelParser(std::unordered_map<std::string, ThreadInfo>& threadInfo,
             for (std::string& l : m.labelIds) {
                 indicies.everything.insert(tId);
 
-                if (l == "UNREAD") m.read = false;
+                if (l == "UNREAD")  {
+                    if (m.internalDate == t.threadDate) t.read = false;
+                }
 
                 // else if (l == "INBOX") isInbox = true;
 
@@ -293,7 +295,7 @@ std::string readHttpResponse(SSL* ssl) {
 void generateRequest(const std::string& token, SSL* ssl, std::string& nextPageToken) {
     std::string req = 
         "GET /gmail/v1/users/me/messages?"
-        "q=after:2025/11/20"
+        "q=after:2025/11/24"
         "&maxResults=500" +
         (nextPageToken.empty() ? "" : "&pageToken=" + nextPageToken) +
         " HTTP/1.1\r\n"
@@ -376,7 +378,6 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
                 if (m["payload"].contains("headers")) {
                     for (const auto& header : m["payload"]["headers"]) {
 
-
                         const std::string name = header["name"].get<std::string>();
                         const std::string value = header["value"].get<std::string>();
                         
@@ -386,8 +387,9 @@ void populateThreadInfo(std::string& response, ThreadInfo& t) {
                             msg.to = cleanToField(value);
                         } else if (name == "Subject" && msg.internalDate == t.threadDate) {
                             t.subject = value;
-                        } 
-
+                        } else if (name == "List-Unsubscribe") {
+                            t.unsubscribe_link = value;
+                        }
                     }
                 }
 
@@ -589,7 +591,6 @@ int main() {
 
     }
 
-
     std::cout << threadInfo.size() << std::endl;
     for (auto& [_, t] : threadInfo) {
 
@@ -633,12 +634,10 @@ int main() {
 
 
     // for (auto& [_, v] : threadInfo) {
-    //     if (v.messages.size() > 1) {
-    //         for (auto& m : v.messages) {
-    //             std::cout << base64url_decode_to_string(m.bodyHtml) << "\n\n";
-    //         }
-    //     }
+    //     std::cout << v.unsubscribe_link << std::endl;
     // }
+
+
 
 
     runServer(indicies, threadInfo, start, 8080);

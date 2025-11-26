@@ -45,10 +45,13 @@ json threadToJson(const ThreadInfo thread) {
     for (const auto& msg : thread.messages)
         j_messages.push_back(messageToJson(msg));
 
+
     return {
         {"threadId", thread.threadId},
         {"threadDate", thread.threadDate},
         {"threadSubject", thread.subject},
+        {"readThread", thread.read},
+        {"unsubscribeLink", thread.unsubscribe_link}, 
         {"messages", j_messages}
     };
 }
@@ -180,9 +183,7 @@ void runServer(const Indicies indicies, const std::unordered_map<std::string, Th
             running = false;
 
             TimePoint end = std::chrono::high_resolution_clock::now();
-
             std::chrono::duration<double> diff = end - start;
-
             std::cout << "Elapsed time: " << diff.count() << " seconds\n";
 
             continue;

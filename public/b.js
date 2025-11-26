@@ -3,7 +3,6 @@ import { RBTree } from "https://cdn.skypack.dev/bintrees";
 
 class MessageInfo {
     constructor(msg) {
-        this.read = msg.read ?? true;
         this.internalDate = msg.internalDate ?? 0;
         this.id = msg.id ?? "";
         this.labelIds = msg.labelIds ?? [];
@@ -19,6 +18,8 @@ class ThreadInfo {
         this.threadId = thread.threadId ?? "";
         this.threadDate = thread.threadDate ?? 0;
         this.threadSubject = thread.threadSubject ?? "";
+        this.readThread = thread.readThread ?? false;
+        this.unsubscribeLink = thread.unsubscribeLink ?? "";
         this.token = thread.token ?? "";
         this.messages = (thread.messages ?? []).map(msg => new MessageInfo(msg));
     }
@@ -207,37 +208,42 @@ function renderThreadDetail(thread) {
     detail.style.display = "block";
 
     const subject = thread.threadSubject || "(No Subject)";
+    const hasRead = thread.readThread || false;
 
     let msgsHtml = "";
     thread.messages.forEach((msg, i) => {
-        const dateStr = new Date(msg.internalDate)
-            .toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+    const dateStr = new Date(msg.internalDate)
+        .toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' });
 
-        msgsHtml += `
-            <div class="message-block">
-                <div class="msg-header">
-                    <div class="msg-header-line1">
-                        <span class="from"><strong>From:</strong> ${msg.from}</span>
-                        <span class="date"><strong>Date:</strong> ${dateStr}</span>
-                    </div>
-                    <div class="msg-header-line2">
-                        <span class="to"><strong>To:</strong> ${msg.to}</span>
-                    </div>
+    msgsHtml += `
+        <div class="message-block">
+            <div class="msg-header">
+                <div class="msg-header-line1">
+                    <span class="from">
+                        <strong>From:</strong> ${msg.from}
+                        ${thread.unsubscribeLink ? `<button class="unsubscribe-btn" onclick="window.open('${thread.unsubscribeLink}', '_blank')">Unsubscribe</button>` : ''}
+                    </span>
+                    <span class="date"><strong>Date:</strong> ${dateStr}</span>
                 </div>
-
-                <div></div>
-
-                <div class="msg-body">
-                    ${msg.bodyHtml 
-                        ? `<iframe class="msg-body-iframe" id="iframe-${i}" sandbox="allow-same-origin"></iframe>` 
-                        : msg.bodyPlain 
-                            ? `<pre class="plain-body">${decodeB64UrlUtf8(msg.bodyPlain)}</pre>` 
-                            : "<em>(no message content)</em>"
-                    }
+                <div class="msg-header-line2">
+                    <span class="to"><strong>To:</strong> ${msg.to}</span>
                 </div>
             </div>
-        `;
-    });
+
+            <div></div>
+
+            <div class="msg-body">
+                ${msg.bodyHtml 
+                    ? `<iframe class="msg-body-iframe" id="iframe-${i}" sandbox="allow-same-origin"></iframe>` 
+                    : msg.bodyPlain 
+                        ? `<pre class="plain-body">${decodeB64UrlUtf8(msg.bodyPlain)}</pre>` 
+                        : "<em>(no message content)</em>"
+                }
+            </div>
+        </div>
+    `;
+});
+
 
     detail.innerHTML = `
         <button class="back-btn" id="back-to-list">← Back</button>
@@ -323,9 +329,14 @@ fetch('api/threads')
             const lastMsg = thread.messages[thread.messages.length - 1];
 
             const div = document.createElement('div');
-            div.className = "email-thread";
+
+            const isUnread = !thread.readThread;
+            div.className = "email-thread" + (isUnread ? " unread-thread" : " read-thread");
             div.innerHTML = `
-                <span class="from">${lastMsg.from}</span>
+                <span class="from">
+                    ${isUnread ? '<span class="unread-dot"></span>' : ''}
+                    ${lastMsg.from}
+                </span>
                 <span class="to">${lastMsg.to}</span>
                 <span class="subject">${thread.threadSubject}</span>
                 <span class="date">${new Date(thread.threadDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>

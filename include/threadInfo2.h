@@ -23,7 +23,6 @@ struct Inbox {
 
 
 struct MessageInfo {
-    bool read = true;
     long long internalDate;
     std::string id;
     std::vector<std::string> labelIds;
@@ -44,6 +43,8 @@ struct ThreadInfo {
     long long threadDate {0};            
     std::string token;
     std::string subject;
+    bool read {true};
+    std::string unsubscribe_link{};
 };
 
 
