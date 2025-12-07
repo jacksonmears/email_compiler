@@ -1,28 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Threads</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matches, Teams & Players</title>
+<style>
+    body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 20px; }
+
+    .tabs, .team-tabs, .player-tabs { display: flex; flex-wrap: wrap; margin-bottom: 10px; }
+    .tab, .team-tab, .player-tab { background: #fff; border-radius: 8px 8px 0 0; padding: 10px 15px; margin-right: 5px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: background 0.2s; }
+    .tab.active, .team-tab.active, .player-tab.active { background: #4CAF50; color: #fff; }
+
+    .game-content, .team-content, .player-card { max-width: 700px; background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; margin-bottom: 20px; }
+
+    .player-header { text-align: center; margin-bottom: 10px; }
+    .player-header h2 { margin: 0; }
+
+    .stats-section { margin-top: 20px; }
+    .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .stat-row:last-child { border-bottom: none; }
+    .section-title { font-weight: bold; margin-top: 15px; }
+    .stat-value { display: flex; justify-content: space-between; width: 100%; }
+</style>
 </head>
 <body>
-    <button id="shutdown-btn">Exit App</button>
 
-    <header>
-        <h1>Email Threads</h1>
-    </header>
+<h1>Matches</h1>
+<div class="tabs" id="gamesContainer"></div>
+<div id="gamesContent"></div>
 
-    <main>
-        <div id="thread-list">
-            <!-- Threads will be dynamically inserted here -->
-        </div>
-    </main>
+<script>
 
-    <!-- MUST load before app.js so app.js can use DOMPurify -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+const statMultipliers = {
+    "Dispossessed": 4.07,
+    "Blocks": 10.37,
+    "Clearances": 1.60,
+    "Interceptions": 4.83,
+    "Recoveries": 2.18,
+    "Tackles": 4.89,
+    "Dribbled past": 2.18,
+    "Accurate crosses": 1.17,
+    "Accurate passes": 0.1,
+    "Assists": 36.21,
+    "Chances created": 3.93,
+    "Total shots": 2.98,
+    "Goals": 26.91
+};
 
-    <!-- Your JS logic -->
-    <script src="app.js"></script>
+const secondary_mult = 0.25;
+
+fetch("/matchData")
+.then(res => res.json())
+.then(data => {
+    const gamesContainer = document.getElementById("gamesContainer");
+    const gamesContent = document.getElementById("gamesContent");
+
+    let firstGame = true;
+
+    data.games.forEach(game => {
+        const gameTab = document.createElement("div");
+        gameTab.className = "tab";
+        gameTab.textContent = `${game.home.name} vs ${game.away.name}`;
+        gamesContainer.appendChild(gameTab);
+
+        const gameContent = document.createElement("div");
+        gameContent.className = "game-content";
+
+        const teamTabsContainer = document.createElement("div");
+        teamTabsContainer.className = "team-tabs";
+        const teamContentsContainer = document.createElement("div");
+
+        let firstTeam = true;
+        for (const teamId in game.teams) {
+            const team = game.teams[teamId];
+
+            const teamTab = document.createElement("div");
+            teamTab.className = "team-tab";
+            teamTab.textContent = team.name;
+            teamTabsContainer.appendChild(teamTab);
+
+            const teamContent = document.createElement("div");
+            teamContent.className = "team-content";
+
+            const playerTabsContainer = document.createElement("div");
+            playerTabsContainer.className = "player-tabs";
+            const playerCardsContainer = document.createElement("div");
+
+            let firstPlayer = true;
+            team.players.forEach(player => {
+                const playerTab = document.createElement("div");
+                playerTab.className = "player-tab";
+
+                // Calculate point total
+                let pointTotal = 0;
+                if(player.stats){
+                    player.stats.forEach(statGroup => {
+                        if(statGroup.key && statGroup.stats){
+                            for(const statName in statGroup.stats){
+                                const statObj = statGroup.stats[statName].stat || statGroup.stats[statName];
+                                const statValue = statObj.value || 0;
+                                if(statMultipliers[statName]){
+                                    pointTotal += statValue * statMultipliers[statName] * secondary_mult;
+                                }
+                            }
+                        }
+                    });
+                }
+
+                playerTab.textContent = `${player.name} (Points: ${pointTotal.toFixed(2)})`;
+                playerTabsContainer.appendChild(playerTab);
+
+                const playerCard = document.createElement("div");
+                playerCard.className = "player-card";
+
+                let html = `
+                    <div class="player-header">
+                        <h2>${player.name} (Points: ${pointTotal.toFixed(2)})</h2>
+                        <p><strong>Team:</strong> ${team.name}</p>
+                        <p><strong>Shirt:</strong> ${player.shirt || "-"} &nbsp;|&nbsp; <strong>Position:</strong> ${player.position || "-"}</p>
+                    </div>
+                    <div class="stats-section"></div>
+                `;
+
+                const statsSection = document.createElement("div");
+                statsSection.className = "stats-section";
+
+                if(player.stats){
+                    player.stats.forEach(statGroup => {
+                        if(statGroup.key && statGroup.stats){
+                            const sectionTitle = document.createElement("div");
+                            sectionTitle.className = "section-title";
+                            sectionTitle.textContent = statGroup.title || statGroup.key;
+                            statsSection.appendChild(sectionTitle);
+
+                            for(const statName in statGroup.stats){
+                                const statObj = statGroup.stats[statName].stat || statGroup.stats[statName];
+                                let value = statObj.value;
+                                if(statObj.type === "fractionWithPercentage"){
+                                    value = `${statObj.value}/${statObj.total}`;
+                                }
+
+                                let multiplierValue = statMultipliers[statName] ? (statObj.value * statMultipliers[statName] * secondary_mult).toFixed(2) : "-";
+
+                                const row = document.createElement("div");
+                                row.className = "stat-row";
+                                row.innerHTML = `<div class="stat-value"><span>${statName}</span><span>${value} (${multiplierValue})</span></div>`;
+                                statsSection.appendChild(row);
+                            }
+                        }
+                    });
+                }
+
+                playerCard.innerHTML = html;
+                playerCard.appendChild(statsSection);
+                playerCardsContainer.appendChild(playerCard);
+
+                if(firstPlayer){
+                    playerTab.classList.add("active");
+                    playerCard.style.display = "block";
+                    firstPlayer = false;
+                }
+
+                playerTab.addEventListener("click", () => {
+                    playerTabsContainer.querySelectorAll(".player-tab").forEach(t => t.classList.remove("active"));
+                    playerCardsContainer.querySelectorAll(".player-card").forEach(c => c.style.display = "none");
+                    playerTab.classList.add("active");
+                    playerCard.style.display = "block";
+                });
+            });
+
+            teamContent.appendChild(playerTabsContainer);
+            teamContent.appendChild(playerCardsContainer);
+            teamContentsContainer.appendChild(teamContent);
+
+            if(firstTeam){
+                teamTab.classList.add("active");
+                teamContent.style.display = "block";
+                firstTeam = false;
+            }
+
+            teamTab.addEventListener("click", () => {
+                teamTabsContainer.querySelectorAll(".team-tab").forEach(t => t.classList.remove("active"));
+                teamContentsContainer.querySelectorAll(".team-content").forEach(c => c.style.display = "none");
+                teamTab.classList.add("active");
+                teamContent.style.display = "block";
+            });
+        }
+
+        gameContent.appendChild(teamTabsContainer);
+        gameContent.appendChild(teamContentsContainer);
+        gamesContent.appendChild(gameContent);
+
+        if(firstGame){
+            gameTab.classList.add("active");
+            gameContent.style.display = "block";
+            firstGame = false;
+        }
+
+        gameTab.addEventListener("click", () => {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".game-content").forEach(c => c.style.display = "none");
+            gameTab.classList.add("active");
+            gameContent.style.display = "block";
+        });
+    });
+})
+.catch(err => {
+    document.getElementById("gamesContent").innerHTML = "<p>Error loading data</p>";
+});
+</script>
 </body>
 </html>

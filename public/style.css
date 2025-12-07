@@ -1,363 +1,39 @@
-/* ---------- Reset ---------- */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
 body {
     font-family: Arial, sans-serif;
-    background-color: #f1f3f4;
+    background: #f4f4f4;
+    padding: 20px;
 }
 
-/* ---------- Top App Bar ---------- */
-.app-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #ffffff;
-    border-bottom: 1px solid #ddd;
-    padding: 0 16px;
-    height: 56px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-.app-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.logo {
-    font-weight: bold;
-    font-size: 1.2em;
-    color: #d93025;
-}
-
-#menu-btn {
-    font-size: 1.5em;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-.app-center input {
-    width: 400px;
-    max-width: 100%;
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 24px;
-    outline: none;
-}
-
-.app-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.icon-btn {
-    background: none;
-    border: none;
-    font-size: 1.2em;
-    cursor: pointer;
-}
-
-.profile-circle {
-    width: 32px;
-    height: 32px;
-    background-color: #d93025;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+h1 {
+    font-size: 28px;
     font-weight: bold;
 }
 
-/* ---------- Main container ---------- */
-.container {
-    display: flex;
-    height: calc(100vh - 56px);
-}
-
-/* ---------- Sidebar ---------- */
-.sidebar {
-    width: 240px;
-    background-color: #f1f3f4;
-    padding: 16px 8px;
-    border-right: 1px solid #ddd;
-    display: flex;
-    flex-direction: column;
-}
-
-.compose-btn {
-    background-color: #d93025;
-    color: white;
-    border: none;
-    padding: 12px;
-    border-radius: 24px;
-    font-weight: bold;
-    cursor: pointer;
-    margin-bottom: 20px;
-}
-
-.folders ul {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.folders li {
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.folders li.active,
-.folders li:hover {
-    background-color: #e8f0fe;
-}
-
-/* ---------- Email List ---------- */
-.email-list {
-    flex: 1;
-    overflow-y: auto;
-    background-color: white;
-}
-
-/* ---------- Inbox Thread Rows ---------- */
-.email-thread {
-    display: grid;
-    grid-template-columns: 250px 300px 1fr 100px; /* From | To | Subject | Date */
-    align-items: center;
-    padding: 8px 16px;
-    border-bottom: 1px solid #ccc; /* grey line between emails */
-    cursor: pointer;
-}
-
-.email-thread > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.email-thread .from {
-    text-align: left;
-}
-
-.email-thread .to {
-    text-align: left;
-}
-
-.email-thread .subject {
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.email-thread .date {
-    text-align: right;
-}
-
-.email-thread:hover {
-    background-color: #f5f5f5;
-}
-
-/* ---------- Full Thread / Message View ---------- */
-.back-btn {
-    margin: 12px 16px;
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: white;
-    cursor: pointer;
-}
-
-.email-message {
-    border-bottom: 1px solid #eee;
-    padding: 16px;
-    background-color: white;
-}
-
-.email-message .header {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-
-.email-message .header div {
-    flex: 1 1 auto;
-    white-space: normal;
-}
-
-.email-message .from,
-.email-message .to,
-.email-message .subject {
-    font-weight: bold;
-}
-
-.email-message .body {
+.json-box {
     white-space: pre-wrap;
-    line-height: 1.4;
-    padding-top: 8px;
-    text-align: center;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.email-message .body.body-html {
-    white-space: pre-wrap;
-    line-height: 1.4;
-    padding-top: 8px;
-    text-align: center;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.email-message .body.body-plain {
-    white-space: pre-wrap;
-    line-height: 1.4;
-    padding-top: 8px;
-    text-align: left;
-}
-
-/* ---------- New message header layout ---------- */
-.msg-header {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 12px;
-    gap: 4px;
+    background: #1e1e1e;
+    color: #dcdcdc;
+    padding: 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-family: "Courier New", monospace;
     font-size: 14px;
+    box-shadow: 0px 0px 8px rgba(0,0,0,0.3);
 }
 
-.msg-header-line1 {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
+/* Simple syntax highlighting */
+.key {
+    color: #9cdcfe;
 }
-
-.msg-header-line1 .from {
-    text-align: left;
+.string {
+    color: #ce9178;
 }
-
-.msg-header-line1 .date {
-    text-align: right;
-    white-space: nowrap;
+.number {
+    color: #b5cea8;
 }
-
-.msg-header-line2 {
-    width: 100%;
+.boolean {
+    color: #dcdcaa;
 }
-
-.msg-header-line2 .to {
-    text-align: left;
-}
-
-/* ---------- Iframe for HTML emails ---------- */
-.msg-body-iframe {
-    width: 100%;        /* full width of container */
-    height: auto;       /* height set dynamically by JS */
-    border: none;
-    display: block;
-    overflow: hidden;
-}
-
-/* ---------- Right Panel ---------- */
-.right-panel {
-    width: 300px;
-    background-color: #fafafa;
-    border-left: 1px solid #ddd;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-}
-
-.panel-header {
-    font-weight: bold;
-    margin-bottom: 12px;
-}
-
-/* ---------- Central div width fix ---------- */
-#thread-detail, #thread-list {
-    flex: 1 1 0;
-    min-width: 0;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-}
-
-.thread-container, .msg-body, .plain-body {
-    overflow-wrap: break-word;
-    word-break: break-word;
-    overflow-x: hidden;
-}
-
-/* ---------- Read / Unread Thread Styling ---------- */
-.email-thread.read-thread {
-    background-color: white;
-    font-weight: normal;
-}
-
-.email-thread.unread-thread {
-    background-color: #f0f7ff; /* light blue */
-    font-weight: bold;
-}
-
-.email-thread.unread-thread:hover {
-    background-color: #e4eefc;
-}
-
-.email-thread.read-thread:hover {
-    background-color: #f5f5f5;
-}
-
-
-.unread-dot {
-    width: 10px;
-    height: 10px;
-    background: #1a73e8;
-    border-radius: 50%;
-    margin-right: 8px;
-    display: inline-block;
-}
-
-.unsubscribe-btn {
-    margin-left: 8px;
-    padding: 2px 6px;
-    font-size: 12px;
-    border: 1px solid #d93025;
-    background: white;
-    color: #d93025;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.unsubscribe-btn:hover {
-    background-color: #d93025;
-    color: white;
-}
-
-
-/* ---------- Responsive ---------- */
-@media (max-width: 1024px) {
-    .right-panel {
-        display: none;
-    }
-    .sidebar {
-        width: 200px;
-    }
-}
-
-@media (max-width: 768px) {
-    .sidebar {
-        display: none;
-    }
-    .app-center input {
-        width: 200px;
-    }
+.null {
+    color: #569cd6;
 }

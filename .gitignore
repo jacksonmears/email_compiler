@@ -3,4 +3,6 @@
 credentials.json
 Makefile
 
+p.cpp
+
 *.exe

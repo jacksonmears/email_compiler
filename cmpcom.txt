@@ -9,8 +9,5 @@ g++ parser1.cpp parserV1.cpp -o parser1.exe -lws2_32 -lssl -lcrypto -luser32 -lg
 
 
 
-g++ parserV2.cpp serverV1.cpp -o zzz.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./zzz
+g++ src/main.cpp src/local_server.cpp src/http_handling.cpp src/api_request.cpp src/create_socket.cpp -o main.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./main
 
-
-
-g++ parserV2.cpp -o z.exe -lws2_32 -lssl -lcrypto -luser32 -lgdi32 -lcomctl32 ; ./z.exe
